@@ -72,6 +72,11 @@ project. Update this document in the same change if a convention changes.
   positioning uses `gk_line_depth_m` / `gk_lateral_follow_scale` from
   `stat_effects.json`, and support targets are clamped by
   `MatchConfig.support_edge_inset_m`.
+- The 4-3-3 shape lives once in `src/core/formation.gd`; `MatchScene` copies each
+  slot onto `PlayerView.formation_slot` and `DecisionBrain` anchors support there.
+  Keep the ball's influence capped by `formation_ball_follow_scale` and
+  `formation_max_shift_m` so the team holds structure. The match camera defaults
+  to FOLLOW; keep the ball's `BALL` marker when changing its scene.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

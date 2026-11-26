@@ -25,6 +25,13 @@ opponent goal. Goalkeepers anchor near their own goal, support targets are clamp
 to the pitch, and kick-offs return players to their formation. Magnitudes remain
 in `data/stat_effects.json`.
 
+Visibility and shape: the match now opens in a closer follow-ball camera (keys
+1/2/3 still switch broadcast/top-down/follow), the ball is larger and emissive
+with a `BALL` marker, and support targets are anchored to each player's 4-3-3 slot
+in `Formation`. The ball shifts the whole shape slightly rather than pulling
+everyone to it; `formation_ball_follow_scale` and `formation_max_shift_m` are
+JSON-only tuning keys.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

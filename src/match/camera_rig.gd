@@ -1,3 +1,4 @@
+class_name CameraRig
 extends Camera3D
 
 ## Simple switchable match camera. Keys 1/2/3 select broadcast, top-down and
@@ -5,7 +6,7 @@ extends Camera3D
 
 enum Mode { BROADCAST, TOP_DOWN, FOLLOW }
 
-var mode: int = Mode.BROADCAST
+var mode: int = Mode.FOLLOW
 var follow_target: Node3D = null
 
 
@@ -25,22 +26,23 @@ func set_follow_target(target: Node3D) -> void:
 func apply_mode() -> void:
 	match mode:
 		Mode.BROADCAST:
-			position = Vector3(0, 34, -82)
+			position = Vector3(0, 26, -62)
 			look_at(Vector3.ZERO, Vector3.UP)
 		Mode.TOP_DOWN:
-			position = Vector3(0, 120, 0)
+			position = Vector3(0, 100, 0)
 			rotation = Vector3(-PI * 0.5, 0, 0)
 		Mode.FOLLOW:
-			position = Vector3(0, 24, -42)
-			look_at(Vector3.ZERO, Vector3.UP)
+			var focus := follow_target.global_position if follow_target != null else Vector3.ZERO
+			position = focus + Vector3(0, 14, -26)
+			look_at(focus + Vector3(0, 0.6, 0), Vector3.UP)
 
 
 func _process(_delta: float) -> void:
 	if mode != Mode.FOLLOW or follow_target == null:
 		return
 	var target_pos: Vector3 = follow_target.global_position
-	position = target_pos + Vector3(0, 24, -42)
-	look_at(target_pos, Vector3.UP)
+	position = target_pos + Vector3(0, 14, -26)
+	look_at(target_pos + Vector3(0, 0.6, 0), Vector3.UP)
 
 
 func _input(event: InputEvent) -> void:

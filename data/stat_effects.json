@@ -58,6 +58,8 @@
     "dribble_advance_m": 12.0,
     "gk_line_depth_m": 2.0,
     "gk_lateral_follow_scale": 0.4,
+    "formation_ball_follow_scale": 0.35,
+    "formation_max_shift_m": 22.0,
     "scatter_degrees_per_missing_composure": 0.5,
     "speed_floor_fraction": 0.7
   }

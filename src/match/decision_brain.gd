@@ -169,6 +169,15 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 					-cfg.goal_width_m * 0.5, cfg.goal_width_m * 0.5
 				)
 				return Vector3(line_x, 0.0, lateral)
+			# Support is anchored to the player's 4-3-3 slot. The ball only
+			# shifts the whole shape a little, so the team keeps its structure
+			# instead of every player collapsing onto the ball.
+			var slot: Vector2 = view.formation_slot
+			var follow := effects.context_value("formation_ball_follow_scale")
+			var max_shift := effects.context_value("formation_max_shift_m")
+			var shift_x := clampf(ball_position.x * follow, -max_shift, max_shift)
+			var shift_z := clampf(ball_position.z * follow, -max_shift, max_shift)
+
 			var depth := 0.0
 			match instructions.support_depth:
 				FMEnums.SupportDepth.DEEP:
@@ -178,19 +187,15 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 			var width := 0.0
 			match instructions.width:
 				FMEnums.WidthMode.NARROW:
-					width = effects.context_value("support_narrow_m")
+					width = -effects.context_value("support_narrow_m")
 				FMEnums.WidthMode.WIDE:
 					width = effects.context_value("support_wide_m")
-			# Stable per-player lane so team-mates do not all aim at the same
-			# support spot. Width instruction scales how wide the lanes spread.
-			var lane := float(absi(view.player_id.hash()) % 1000) / 999.0 * 2.0 - 1.0
-			var z := clampf(ball_position.z + lane * width, -cfg.pitch_width_m * 0.5 + 2.0, cfg.pitch_width_m * 0.5 - 2.0)
+
 			var half_l := cfg.pitch_length_m * 0.5
-			var x := clampf(
-				ball_position.x + sign * depth,
-				-half_l + cfg.support_edge_inset_m,
-				half_l - cfg.support_edge_inset_m
-			)
+			var half_w := cfg.pitch_width_m * 0.5
+			var edge := cfg.support_edge_inset_m
+			var x := clampf(sign * slot.x + shift_x + sign * depth, -half_l + edge, half_l - edge)
+			var z := clampf(slot.y + shift_z + signf(slot.y) * width, -half_w + edge, half_w - edge)
 			return Vector3(x, 0.0, z)
 		_:
 			return ball_position

@@ -12,6 +12,7 @@ var player_data: PlayerData = null
 var instructions: PlayerInstructions = null
 var match_state: PlayerState = null
 var last_decision: DecisionResult = null
+var formation_slot: Vector2 = Vector2.ZERO  # home-team 4-3-3 coordinates
 
 
 func setup(player: PlayerData, club: ClubData, is_home: bool) -> void:

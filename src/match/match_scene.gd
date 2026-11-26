@@ -6,20 +6,6 @@ extends Node3D
 const PLAYER_SCENE := preload("res://scenes/player_view.tscn")
 const PLAYTEST_LOG_PATH := "user://fm_playtest_log.jsonl"
 
-const FORMATION: Array[Vector2] = [
-	Vector2(-48, 0),    # GK
-	Vector2(-35, -12),  # CB
-	Vector2(-35, 12),   # CB
-	Vector2(-28, -28),  # LB
-	Vector2(-28, 28),   # RB
-	Vector2(-18, 0),    # DM
-	Vector2(-6, -10),   # CM
-	Vector2(4, 0),      # AM
-	Vector2(18, -28),   # LW
-	Vector2(22, 0),     # ST
-	Vector2(18, 28),    # RW
-]
-
 @onready var ball: Ball = $Ball
 @onready var score_label: Label = $HUD/Panel/Layout/ScoreLabel
 @onready var clock_label: Label = $HUD/Panel/Layout/ClockLabel
@@ -61,9 +47,10 @@ func _ready() -> void:
 	rules_engine.event_raised.connect(_on_rule_event)
 	ball.kick_performed.connect(_on_ball_kicked_for_stats)
 	_refresh_hud()
-	var camera := find_child("MatchCamera", true, false)
-	if camera != null and camera.has_method("set_follow_target"):
+	var camera := find_child("MatchCamera", true, false) as CameraRig
+	if camera != null:
 		camera.set_follow_target(ball)
+		camera.set_mode(CameraRig.Mode.FOLLOW)
 
 
 func _physics_process(delta: float) -> void:
@@ -164,12 +151,13 @@ func _spawn_teams() -> void:
 			var view: RigidBody3D = PLAYER_SCENE.instantiate()
 			players_node.add_child(view)
 			view.setup(starters[i], club, is_home)
+			view.formation_slot = Formation.slot(i)
 			view.global_position = _formation_position(side, i)
 			player_views.append(view)
 
 
 func _formation_position(side: int, index: int) -> Vector3:
-	var spot: Vector2 = FORMATION[index]
+	var spot: Vector2 = Formation.slot(index)
 	if side == FMEnums.Side.AWAY:
 		spot.x = -spot.x
 	return Vector3(spot.x, 1.0, spot.y)

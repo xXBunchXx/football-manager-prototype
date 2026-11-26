@@ -203,11 +203,13 @@ func _test_instructions() -> void:
 	_check(with_duty.effective_duty(cb) == FMEnums.Duty.ATTACK, "duty override beats instruction duty")
 
 
-func _make_view(player: PlayerData, club: ClubData, is_home: bool, position: Vector3, ctx: MatchContext) -> RigidBody3D:
+func _make_view(player: PlayerData, club: ClubData, is_home: bool, position: Vector3, ctx: MatchContext, slot_index: int = -1) -> RigidBody3D:
 	var packed: PackedScene = load("res://scenes/player_view.tscn")
 	var view := packed.instantiate() as RigidBody3D
 	add_child(view)
 	view.setup(player, club, is_home)
+	if slot_index >= 0:
+		view.formation_slot = Formation.slot(slot_index)
 	view.global_position = position
 	ctx.add_view(view)
 	return view
@@ -262,29 +264,30 @@ func _test_decisions() -> void:
 	var weak_st := _make_view(weak_club.get_starters()[9], weak_club, false, Vector3(20, 1, -20), ctx)
 	_check(float(brain.decide(strong_st, ctx).scores["shoot"]) > float(brain.decide(weak_st, ctx).scores["shoot"]), "stronger attributes raise shoot utility")
 
-	var deep_cb := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-25, 1, 15), ctx)
+	var deep_cb := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-25, 1, 15), ctx, 1)
 	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "DEEP"})
 	var deep_target: Vector3 = brain.decide(deep_cb, ctx).target
 	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "ADVANCED"})
 	var high_target: Vector3 = brain.decide(deep_cb, ctx).target
 	_check(deep_target.x < high_target.x, "support depth shifts the target up or down pitch")
 
-	var home_gk := _make_view(strong_club.get_starters()[0], strong_club, true, Vector3(-48, 1, 0), ctx)
-	var away_gk := _make_view(strong_club.get_starters()[0], strong_club, false, Vector3(48, 1, 0), ctx)
+	var home_gk := _make_view(strong_club.get_starters()[0], strong_club, true, Vector3(-48, 1, 0), ctx, 0)
+	var away_gk := _make_view(strong_club.get_starters()[0], strong_club, false, Vector3(48, 1, 0), ctx, 0)
 	var home_gk_target: Vector3 = brain.call("_target_for", "support", home_gk, ctx, home_gk.instructions)
 	var away_gk_target: Vector3 = brain.call("_target_for", "support", away_gk, ctx, away_gk.instructions)
 	_check(home_gk_target.x < -45.0 and away_gk_target.x > 45.0, "goalkeepers anchor near their own goal")
 
 	ball.reset_to(Vector3(-60.0, 1.0, 0.0))
-	var deep_out := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-40, 1, 0), ctx)
+	var deep_out := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-40, 1, 0), ctx, 1)
 	deep_out.instructions = deep_out.instructions.with_overrides({"support_depth": "DEEP"})
 	var clamped_target: Vector3 = brain.call("_target_for", "support", deep_out, ctx, deep_out.instructions)
 	_check(clamped_target.x >= -cfg.pitch_length_m * 0.5, "support targets stay on the pitch")
 	ball.reset_to(Vector3(30.0, 1.0, 0.0))
 
 	var wide_lanes: Array[float] = []
-	for starter in strong_club.get_starters():
-		var wide_view := _make_view(starter, strong_club, true, Vector3(-8, 1, 0), ctx)
+	var starters: Array = strong_club.get_starters()
+	for slot_index in starters.size():
+		var wide_view := _make_view(starters[slot_index], strong_club, true, Vector3(-8, 1, 0), ctx, slot_index)
 		wide_view.instructions = wide_view.instructions.with_overrides({"width": "WIDE"})
 		var lane_target: Vector3 = brain.call("_target_for", "support", wide_view, ctx, wide_view.instructions)
 		wide_lanes.append(lane_target.z)
@@ -292,6 +295,12 @@ func _test_decisions() -> void:
 	for z in wide_lanes:
 		unique_lanes[snappedf(z, 0.01)] = true
 	_check(unique_lanes.size() >= 3, "wide support spreads team-mates into distinct lanes (%d lanes)" % unique_lanes.size())
+
+	ball.reset_to(Vector3(30.0, 1.0, 0.0))
+	var shaped_cb := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-30, 1, -12), ctx, 1)
+	var shape_target: Vector3 = brain.call("_target_for", "support", shaped_cb, ctx, shaped_cb.instructions)
+	_check(shape_target.x < 0.0, "support stays in the team's half when the ball is upfield")
+	_check(MatchContext.flat_distance(shape_target, ball.global_position) > 20.0, "support does not collapse onto the ball")
 
 	var agent := PlayerAgent.new(striker, brain, ctx, effects)
 	agent.decision_timer = 10.0
@@ -653,14 +662,23 @@ func _test_match_scene() -> void:
 	var views: Array = instance.call("get_player_views")
 	_check(views.size() == 22, "match scene spawns 22 players")
 	var tactical_ready := true
+	var slots_ready := true
 	for view in views:
 		if view.call("get_instructions") == null or view.call("get_match_state") == null:
 			tactical_ready = false
+		if (view as RigidBody3D).formation_slot == Vector2.ZERO:
+			slots_ready = false
 	_check(tactical_ready, "all 22 starters carry instructions and match state")
+	_check(slots_ready, "all players carry a formation slot")
 	var agents: Array = instance.call("get_agents")
 	_check(agents.size() == 22, "match scene builds 22 decision agents")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
+	var scene_ball: Ball = instance.call("get_ball")
+	if camera != null:
+		_check(int(camera.get("mode")) == CameraRig.Mode.FOLLOW, "camera defaults to follow-ball view")
+		_check(camera.get("follow_target") == scene_ball, "camera follows the ball")
+		_check(scene_ball.find_child("Marker", true, false) != null, "ball has a visibility marker")
 	var match_ground := instance.find_child("GroundCollider", true, false)
 	_check(match_ground != null, "match scene pitch has a ground collider")
 	var score_label: Label = instance.find_child("ScoreLabel", true, false)
@@ -671,7 +689,6 @@ func _test_match_scene() -> void:
 		_check(score_label.text.contains("-"), "HUD shows the score")
 	var scene_stats: MatchStats = instance.call("get_stats")
 	_check(scene_stats != null, "match scene tracks calibration stats")
-	var scene_ball: Ball = instance.call("get_ball")
 	scene_ball.apply_player_kick(views[0], false, Vector3(1, 0, 0), 5.0, 0.0, 0.0, 0.0)
 	var scene_data: Dictionary = scene_stats.to_dict()
 	var home_data: Dictionary = scene_data["home"]
