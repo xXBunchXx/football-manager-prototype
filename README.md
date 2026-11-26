@@ -3,6 +3,8 @@
 A Godot 4.7.2 prototype: physics-driven 3D match engine with deep individual
 player instructions. See `docs/CONVENTIONS.md` for structure and naming rules.
 
+Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
+
 ## Status
 
 Phase 1 (foundation) complete: folder tree, autoloads, `MatchConfig`, enums,
