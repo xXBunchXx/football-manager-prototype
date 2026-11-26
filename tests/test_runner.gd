@@ -12,6 +12,7 @@ func _ready() -> void:
 	MatchEvents.event_logged.connect(_on_event_logged)
 	_test_config()
 	_test_data()
+	_test_match_scene()
 	_test_rng()
 	_test_events()
 	_test_save()
@@ -142,6 +143,20 @@ func _test_data() -> void:
 	var sample: PlayerData = GameData.clubs[0].squad[0]
 	var rebuilt := PlayerData.from_dict(sample.to_dict())
 	_check(rebuilt != null and rebuilt.display_name() == sample.display_name(), "PlayerData round trip")
+
+
+func _test_match_scene() -> void:
+	var packed: PackedScene = load("res://scenes/match_scene.tscn")
+	_check(packed != null, "match scene resource loads")
+	if packed == null:
+		return
+	var instance: Node = packed.instantiate()
+	add_child(instance)
+	var views: Array = instance.call("get_player_views")
+	_check(views.size() == 22, "match scene spawns 22 players")
+	var camera := instance.find_child("MatchCamera", true, false)
+	_check(camera != null, "match scene has a match camera")
+	instance.queue_free()
 
 
 func _average_tier(tier: int) -> float:

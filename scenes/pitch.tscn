@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/match/pitch.gd" id="1_pitch"]
+[ext_resource type="Script" path="res://src/match/camera_rig.gd" id="2_camera"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_grass"]
+size = Vector3(105, 0.1, 68)
+
+[sub_resource type="StandardMaterial3D" id="Mat_grass"]
+albedo_color = Color(0.12, 0.42, 0.16, 1)
+
+[node name="Pitch" type="Node3D"]
+script = ExtResource("1_pitch")
+
+[node name="Grass" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_grass")
+material_override = SubResource("Mat_grass")
+position = Vector3(0, -0.05, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+position = Vector3(-30, 60, 20)
+rotation = Vector3(-0.9, -0.5, 0)
+
+[node name="MatchCamera" type="Camera3D" parent="."]
+position = Vector3(0, 34, -82)
+script = ExtResource("2_camera")

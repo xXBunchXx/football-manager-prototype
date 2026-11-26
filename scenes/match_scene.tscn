@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/match/match_scene.gd" id="1_match"]
+[ext_resource type="PackedScene" path="res://scenes/pitch.tscn" id="2_pitch"]
+
+[node name="MatchScene" type="Node3D"]
+script = ExtResource("1_match")
+
+[node name="Pitch" parent="." instance=ExtResource("2_pitch")]

@@ -1,0 +1,34 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/match/player_view.gd" id="1_view"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.35
+height = 1.8
+
+[node name="PlayerView" type="RigidBody3D"]
+collision_layer = 2
+collision_mask = 3
+mass = 75.0
+linear_damp = 4.0
+angular_damp = 8.0
+axis_lock_angular_x = true
+axis_lock_angular_y = true
+axis_lock_angular_z = true
+script = ExtResource("1_view")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="NameLabel" type="Label3D" parent="."]
+billboard = 1
+font_size = 24
+position = Vector3(0, 1.3, 0)
+text = ""

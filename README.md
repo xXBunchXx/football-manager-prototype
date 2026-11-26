@@ -7,14 +7,19 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 2 (player/club data) complete: typed Resources (`PlayerData`,
-`StatProfile`, `ClubData`, `LeagueData`) loaded and validated from JSON fixtures
-in `data/`. Six clubs, 108 players, 16 attributes per player.
+Phase 3 (pitch and pill players) complete: `scenes/pitch.tscn` with procedural
+markings/goals, `scenes/match_scene.tscn` spawning 22 `RigidBody3D` capsule
+players in 4-3-3 shape, and a camera rig with broadcast/top-down/follow modes
+(keys 1/2/3). No ball physics or AI yet.
 
-To regenerate/rebalance the fixtures, edit `tools/generate_fixtures.py` and run
+Earlier phases: typed Resources (`PlayerData`, `StatProfile`, `ClubData`,
+`LeagueData`) loaded from JSON fixtures; six clubs, 108 players, 16 attributes
+each. To regenerate/rebalance fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
-Next: phase 3, the 3D pitch and pill players.
+To look at the match: open `scenes/match_scene.tscn` and press Play.
+
+Next: phase 4, ball physics and the kick/header API.
 
 ## Run the checks
 
