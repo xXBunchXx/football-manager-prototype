@@ -1,0 +1,25 @@
+{
+  "players": {
+    "ashford-city-10": {
+      "shoot_on_sight": false,
+      "passing_risk": "BALANCED"
+    },
+    "ashford-city-02": {
+      "man_mark": true,
+      "tackle_aggression": "AGGRESSIVE"
+    },
+    "westfield-fc-10": {
+      "runs": "HOLD"
+    }
+  },
+  "teams": {
+    "ashford-city": {
+      "mentality": "ATTACKING",
+      "tempo": "FAST"
+    },
+    "dunmoor-town": {
+      "mentality": "DEFENSIVE",
+      "defensive_line": "DEEP"
+    }
+  }
+}

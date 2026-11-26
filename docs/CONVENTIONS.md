@@ -5,7 +5,8 @@ project. Update this document in the same change if a convention changes.
 
 ## Layout
 
-- `data/` — hand-editable JSON fixtures (source of truth for generated content).
+- `data/` — hand-editable JSON fixtures: generated players/clubs/leagues plus
+  `instructions.json` for tactical overrides.
 - `src/core/` — Resource classes, enums, config. No scene logic here.
 - `src/autoload/` — global singletons: `GameData`, `RngService`, `MatchEvents`, `SaveGame`.
 - `src/match/` — match simulation, agents, ball, rules engine and debug overlay.
@@ -46,8 +47,14 @@ project. Update this document in the same change if a convention changes.
 - JSON is the source of truth for generated content; `FixtureLoader` validates it
   and constructs typed Resources. User-created content is saved as JSON in `user://`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
-  per-match mutable values (stamina, morale, form, current instructions) belong in
-  a separate plain `PlayerState` object.
+  per-match mutable values (stamina, morale, form, cards, mark assignment,
+  event counters) belong in a separate `PlayerState` object that stores only the
+  player's id string — never a reference back to `PlayerData`.
+- Instructions are typed Resources. `InstructionDefaults` supplies a baseline per
+  `role_id`; `data/instructions.json` holds only per-player and per-club overrides.
+- In `instructions.json`, enum values are written as UPPER_SNAKE_CASE strings
+  (`"ATTACKING"`, `"NARROW"`), never raw integers. Validation rejects unknown
+  keys and unknown names. Booleans stay JSON `true`/`false`.
 
 ## Physics layers
 

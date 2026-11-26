@@ -12,6 +12,7 @@ func _ready() -> void:
 	MatchEvents.event_logged.connect(_on_event_logged)
 	_test_config()
 	_test_data()
+	_test_instructions()
 	_test_match_scene()
 	await _test_ball()
 	_test_rng()
@@ -146,6 +147,57 @@ func _test_data() -> void:
 	_check(rebuilt != null and rebuilt.display_name() == sample.display_name(), "PlayerData round trip")
 
 
+func _test_instructions() -> void:
+	var all_valid := true
+	for player_id in GameData.players_by_id:
+		var inst: PlayerInstructions = GameData.player_instructions.get(player_id)
+		if inst == null or not PlayerInstructions.is_valid_dict(inst.to_dict()):
+			all_valid = false
+	_check(all_valid, "every player has valid typed instructions")
+	_check(GameData.player_instructions.size() == 108, "instructions built for all players")
+
+	var teams_valid := true
+	for club_id in GameData.team_instructions:
+		var ti: TeamInstructions = GameData.team_instructions[club_id]
+		if not TeamInstructions.is_valid_dict(ti.to_dict()):
+			teams_valid = false
+	_check(teams_valid and GameData.team_instructions.size() == 6, "every club has valid team instructions")
+
+	var st := InstructionDefaults.for_role("st")
+	var cb := InstructionDefaults.for_role("cb")
+	_check(st.duty == FMEnums.Duty.ATTACK and st.shoot_on_sight, "ST baseline is attacking and shoots on sight")
+	_check(cb.duty == FMEnums.Duty.DEFEND and not cb.shoot_on_sight, "CB baseline is defensive and holds shots")
+
+	var overridden: PlayerInstructions = GameData.player_instructions["ashford-city-10"]
+	_check(not overridden.shoot_on_sight and overridden.passing_risk == FMEnums.PassingRisk.BALANCED, "JSON player overrides win over role baseline")
+	var untouched: PlayerInstructions = GameData.player_instructions["kingsport-rovers-10"]
+	_check(untouched.shoot_on_sight, "players without overrides keep role baseline")
+	_check(not PlayerInstructions.is_valid_dict({"duty": "DEFEND", "bogus": 1}), "instruction validation rejects unknown keys")
+	_check(PlayerInstructions.is_valid_dict({"duty": "DEFEND"}, true), "instruction validation accepts named partial overrides")
+
+	var ashford_team: TeamInstructions = GameData.team_instructions["ashford-city"]
+	var kingsport_team: TeamInstructions = GameData.team_instructions["kingsport-rovers"]
+	_check(ashford_team.mentality == FMEnums.Mentality.ATTACKING, "JSON team override wins")
+	_check(kingsport_team.mentality == FMEnums.Mentality.BALANCED, "team default applies without override")
+
+	var sample: PlayerData = GameData.clubs[0].squad[0]
+	var before := sample.to_dict()
+	var state := PlayerState.for_player(sample)
+	state.player_id = "hacked"
+	state.spend_stamina(1000.0)
+	state.adjust_morale(-10.0)
+	state.apply_card(FMEnums.CardColor.YELLOW)
+	state.apply_card(FMEnums.CardColor.YELLOW)
+	_check(sample.to_dict() == before, "PlayerState never mutates PlayerData")
+	_check(state.stamina == 0.0 and state.morale == 0.0, "PlayerState clamps physical and mental values")
+	_check(state.red_cards == 1 and state.is_suspended(), "two yellows produce a suspension")
+	_check(state.is_valid(), "mutated PlayerState remains valid")
+
+	var with_duty := PlayerState.for_player(sample)
+	with_duty.duty_override = FMEnums.Duty.ATTACK
+	_check(with_duty.effective_duty(cb) == FMEnums.Duty.ATTACK, "duty override beats instruction duty")
+
+
 func _test_match_scene() -> void:
 	var packed: PackedScene = load("res://scenes/match_scene.tscn")
 	_check(packed != null, "match scene resource loads")
@@ -155,6 +207,11 @@ func _test_match_scene() -> void:
 	add_child(instance)
 	var views: Array = instance.call("get_player_views")
 	_check(views.size() == 22, "match scene spawns 22 players")
+	var tactical_ready := true
+	for view in views:
+		if view.call("get_instructions") == null or view.call("get_match_state") == null:
+			tactical_ready = false
+	_check(tactical_ready, "all 22 starters carry instructions and match state")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
 	instance.free()

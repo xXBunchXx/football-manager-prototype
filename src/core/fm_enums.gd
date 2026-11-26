@@ -18,6 +18,23 @@ enum Position { GK, CB, LB, RB, DM, CM, AM, LW, RW, ST }
 
 enum TeamTier { WEAK, MID, STRONG }
 
+# Individual instruction scales (all mid-point values are the neutral default).
+enum Duty { DEFEND, SUPPORT, ATTACK }
+enum SupportDepth { DEEP, STANDARD, ADVANCED }
+enum WidthMode { NARROW, STANDARD, WIDE }
+enum Runs { HOLD, BALANCED, FORWARD }
+enum Pressing { LOW, STANDARD, HIGH }
+enum TackleAggression { CAUTIOUS, BALANCED, AGGRESSIVE }
+enum PassingRisk { SAFE, BALANCED, RISKY }
+
+# Team instruction scales.
+enum Mentality { DEFENSIVE, BALANCED, ATTACKING }
+enum Tempo { SLOW, STANDARD, FAST }
+enum DefensiveLine { DEEP, STANDARD, HIGH }
+enum PassingStyle { SHORT, MIXED, DIRECT }
+
+enum CardColor { YELLOW, RED }
+
 const LAYER_WORLD := 1
 const LAYER_PLAYER := 2
 const LAYER_BALL := 4

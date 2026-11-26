@@ -7,7 +7,15 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 4 (ball physics) complete: `scenes/ball.tscn` is an always-physical
+Phase 5 (instructions and player state) complete: `PlayerInstructions` and
+`TeamInstructions` are typed Resources with validated UPPER_SNAKE_CASE enum names
+in `data/instructions.json`. `InstructionDefaults` supplies role baselines and
+JSON overrides only the exceptions. `PlayerState` holds mutable per-match values
+(stamina, fatigue, morale, form, injury risk, cards, mark assignment, duty
+override, event counters) and stores only a player id, so it cannot mutate the
+immutable `PlayerData`. Every match starter carries both.
+
+Phase 4: `scenes/ball.tscn` is an always-physical
 `RigidBody3D` ball. Kicks/headers are impulses with loft, scatter and side spin;
 a Magnus force curves spinning shots. Possession is steering-force control
 (toward a point at the player's feet, no reparenting). `PitchBounds.classify()`
@@ -23,7 +31,8 @@ fixtures, edit `tools/generate_fixtures.py` and run
 
 To look at the match: open `scenes/match_scene.tscn` and press Play (K = kick).
 
-Next: phase 5, per-player instructions and player state.
+Next: phase 6, the decision layer that turns instructions and attributes into
+movement, passing and shooting behaviour.
 
 ## Run the checks
 
