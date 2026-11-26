@@ -55,10 +55,35 @@ const REQUIRED_CONTEXT := [
 	"speed_min_fraction", "speed_max_fraction",
 ]
 
+const SIMULATION_KEYS := [
+	"possessions_per_team", "tempo_possession_scale", "mentality_possession_scale",
+	"touch_slot_weights", "touch_attribute_scale", "receiver_slot_weights",
+	"receiver_attribute_scale", "wide_zone_chance", "attacking_third_chance",
+	"defensive_third_chance", "action_noise", "cross_zone_bonus",
+	"switch_zone_bonus", "shoot_zone_bonus", "dribble_attacking_bonus",
+	"dribble_defensive_penalty", "pass_success_base", "pass_success_attribute_scale",
+	"cross_success_penalty", "switch_success_penalty", "pass_risky_penalty",
+	"pass_safe_bonus", "pass_direct_penalty", "pass_short_bonus",
+	"dribble_success_base", "dribble_success_attribute_scale",
+	"tackle_attempt_base", "tackle_modifier_chance_scale", "tackle_win_base",
+	"tackle_win_attribute_scale", "tackle_foul_chance", "shot_goal_base",
+	"shot_goal_attribute_scale", "shot_save_base", "shot_save_keeper_scale",
+	"shot_on_target_base", "shot_wide_penalty", "min_chance", "max_chance",
+	"possession_seconds_per_possession",
+]
+
+const ANALYSIS_KEYS := [
+	"min_pass_completion_rate", "max_tackles_per_match", "min_tackle_win_rate",
+	"max_fouls_per_tackle", "min_shot_conversion", "min_shots_per_match",
+	"min_possession_share",
+]
+
 var action_attribute_weights: Dictionary = {}
 var action_base: Dictionary = {}
 var instruction_modifiers: Dictionary = {}
 var context: Dictionary = {}
+var simulation: Dictionary = {}
+var analysis: Dictionary = {}
 
 
 static func load(path: String = FILE) -> StatEffects:
@@ -110,12 +135,47 @@ static func load(path: String = FILE) -> StatEffects:
 			push_error("StatEffects: context missing '%s'" % key)
 			return null
 	result.context = ctx
+
+	var sim_raw: Variant = data.get("simulation", {})
+	if not (sim_raw is Dictionary):
+		push_error("StatEffects: invalid simulation block")
+		return null
+	for key in SIMULATION_KEYS:
+		if not (sim_raw as Dictionary).has(key):
+			push_error("StatEffects: simulation missing '%s'" % key)
+			return null
+		var value: Variant = (sim_raw as Dictionary)[key]
+		if key.ends_with("_weights"):
+			if not (value is Array) or not _array_numbers_only(value):
+				push_error("StatEffects: simulation weights '%s' must be numeric" % key)
+				return null
+		elif not (value is int or value is float):
+			push_error("StatEffects: simulation value '%s' must be numeric" % key)
+			return null
+		result.simulation[key] = value
+
+	var analysis_raw: Variant = data.get("analysis", {})
+	if not (analysis_raw is Dictionary) or not _numbers_only(analysis_raw):
+		push_error("StatEffects: invalid analysis block")
+		return null
+	for key in ANALYSIS_KEYS:
+		if not (analysis_raw as Dictionary).has(key):
+			push_error("StatEffects: analysis missing '%s'" % key)
+			return null
+	result.analysis = analysis_raw
 	return result
 
 
 static func _numbers_only(data: Dictionary) -> bool:
 	for key in data:
 		var value: Variant = data[key]
+		if not (value is int or value is float):
+			return false
+	return true
+
+
+static func _array_numbers_only(data: Array) -> bool:
+	for value in data:
 		if not (value is int or value is float):
 			return false
 	return true
@@ -144,3 +204,16 @@ func base_score(action_key: String) -> float:
 
 func context_value(key: String) -> float:
 	return float(context.get(key, 0.0))
+
+
+func simulation_value(key: String) -> float:
+	return float(simulation.get(key, 0.0))
+
+
+func simulation_weights(key: String) -> Array:
+	var value: Variant = simulation.get(key, [])
+	return value if value is Array else []
+
+
+func analysis_value(key: String) -> float:
+	return float(analysis.get(key, 0.0))

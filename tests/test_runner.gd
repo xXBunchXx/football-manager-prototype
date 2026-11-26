@@ -18,6 +18,9 @@ func _ready() -> void:
 	await _test_rules()
 	_test_league()
 	_test_stats()
+	_test_stats_detail()
+	_test_history_and_analysis()
+	_test_fast_simulation()
 	await _test_physics()
 	await _test_match_scene()
 	await _test_ball()
@@ -76,6 +79,14 @@ func _test_rng() -> void:
 		if value < 0.0 or value >= 1.0:
 			in_range = false
 	_check(in_range, "RngService.randf stays in [0,1)")
+
+	RngService.set_seed(31337)
+	RngService.chance(0.5)
+	var after_chance := RngService.randf()
+	RngService.set_seed(31337)
+	RngService.randf()
+	var after_roll := RngService.randf()
+	_check(is_equal_approx(after_chance, after_roll), "RngService.chance consumes the seeded stream")
 
 
 func _test_events() -> void:
@@ -900,6 +911,111 @@ func _test_stats() -> void:
 	_check(int(away["fouls"]) == 0, "fouls are not charged to the fouled side")
 	var parsed: Variant = JSON.parse_string(stats.summary())
 	_check(parsed is Dictionary, "stats summary is valid JSON")
+
+
+func _test_stats_detail() -> void:
+	var stats := MatchStats.new()
+	stats.record_kick(FMEnums.Side.HOME, true, "pass", "p1", "p2")
+	stats.record_pass_completion("p1", "p2", FMEnums.Side.HOME, "p2")
+	stats.record_tackle_attempt("p3", FMEnums.Side.HOME)
+	stats.record_tackle_win("p3", FMEnums.Side.HOME)
+	stats.record_event(RuleEvent.create(
+		RuleEvent.Type.FOUL, "foul", "p3", FMEnums.Side.AWAY,
+		FMEnums.FoulSeverity.YELLOW, FMEnums.RestartType.FREE_KICK
+	))
+	var data: Dictionary = stats.to_dict()
+	var side: Dictionary = data["home"]
+	var players: Dictionary = data["players"]
+	var passer: Dictionary = players["p1"]
+	var tackler: Dictionary = players["p3"]
+	_check(int(side["passes_completed"]) == 1 and int(side["passes_to_target"]) == 1, "team pass completion counts the intended receiver")
+	_check(int(passer["passes_attempted"]) == 1 and int(passer["passes_completed"]) == 1, "player pass completion is recorded")
+	_check(int(tackler["tackles"]) == 1 and int(tackler["tackle_wins"]) == 1, "player tackle attempts and wins are recorded")
+	_check(int(tackler["fouls"]) == 1 and int(tackler["yellow_cards"]) == 1, "foul and card credit the offender's player record")
+	_check(not players.has(""), "stats do not create an empty player record")
+
+
+func _test_history_and_analysis() -> void:
+	var stats := MatchStats.new()
+	var home: Dictionary = stats.get_side(FMEnums.Side.HOME)
+	home["passes_attempted"] = 100
+	home["passes_completed"] = 10
+	home["tackles"] = 30
+	home["tackle_wins"] = 3
+	home["fouls"] = 6
+	home["shots"] = 2
+	home["control_seconds"] = 600.0
+	home["goals"] = 0
+	var club_id := GameData.clubs[0].id
+	stats.get_side(FMEnums.Side.AWAY)["control_seconds"] = 1200.0
+	stats.get_side(FMEnums.Side.AWAY)["goals"] = 2
+	var first := MatchRecord.new()
+	first.fixture_id = "analysis-1"
+	first.source = "test"
+	first.home_club_id = club_id
+	first.away_club_id = GameData.clubs[1].id
+	first.stats = stats.to_dict()
+	var second := MatchRecord.new()
+	second.fixture_id = "analysis-2"
+	second.source = "test"
+	second.home_club_id = GameData.clubs[2].id
+	second.away_club_id = club_id
+	second.stats = stats.to_dict()
+
+	var history := MatchHistory.new()
+	history.add(first)
+	history.add(second)
+	_check(history.find_fixture("analysis-1") == first and history.latest() == second, "history finds records by fixture and exposes the latest")
+	var effects := StatEffects.load()
+	var report: Dictionary = history.analysis(effects)
+	var clubs: Dictionary = report["clubs"]
+	var club: Dictionary = clubs[club_id]
+	_check(is_equal_approx(float(club["pass_completion_rate"]), 0.1), "analysis calculates pass completion from attempts and completions")
+	_check(is_equal_approx(float(club["tackle_win_rate"]), 0.1), "analysis calculates tackle win rate")
+	_check(is_equal_approx(float(club["fouls_per_tackle"]), 0.2), "analysis calculates fouls per tackle")
+	var codes: Array[String] = []
+	for issue in report["issues"]:
+		codes.append(String((issue as Dictionary)["code"]))
+	_check(codes.has("low_pass_completion") and codes.has("unproductive_tackling"), "analysis flags low completion and unproductive tackling")
+	_check(history.analysis_text(effects).contains("Player leaders"), "analysis text includes player leaders")
+
+	var previous_path: String = SaveGame.save_path
+	SaveGame.set_path("user://fm-history-test.json")
+	_check(history.save(), "match history saves through SaveGame")
+	var loaded := MatchHistory.new()
+	_check(loaded.load() and loaded.records.size() == 2, "match history reloads from JSON")
+	_check(loaded.records[0].fixture_id == "analysis-1", "saved history keeps fixture identity")
+	var manager := SeasonManager.new()
+	_check(manager.new_season(GameData.leagues[0], GameData.clubs), "season manager builds a season for the save-preservation check")
+	_check(manager.save(), "season saves after history was written")
+	_check((SaveGame.load_state() as Dictionary).has("match_history"), "season save preserves non-season keys")
+	SaveGame.set_path(previous_path)
+
+
+func _test_fast_simulation() -> void:
+	var effects := StatEffects.load()
+	var rules_config := RulesConfig.load()
+	_check(effects != null and rules_config != null, "fast simulation tuning loads")
+	if effects == null or rules_config == null:
+		return
+	var fixture: Fixture = FixtureGenerator.generate(GameData.leagues[0])[0]
+	var simulator := FastMatchSimulator.new(effects, rules_config)
+	RngService.set_seed(9001)
+	var first := simulator.simulate(fixture)
+	RngService.set_seed(9001)
+	var second := simulator.simulate(fixture)
+	_check(first != null and second != null, "fast simulator produces a match record")
+	if first == null or second == null:
+		return
+	var first_signature := JSON.stringify({"home_goals": first.home_goals, "away_goals": first.away_goals, "stats": first.stats})
+	var second_signature := JSON.stringify({"home_goals": second.home_goals, "away_goals": second.away_goals, "stats": second.stats})
+	_check(first_signature == second_signature, "fast simulation is deterministic for a fixed seed")
+	_check(first.source == "fast", "fast simulation records its source")
+	_check(int((first.stats["home"] as Dictionary)["passes_attempted"]) > 0, "fast simulation records passes")
+	_check((first.stats["players"] as Dictionary).size() == 22, "fast simulation records all 22 starters")
+	var max_goals: int = int((first.stats["home"] as Dictionary)["goals"]) + int((first.stats["away"] as Dictionary)["goals"])
+	_check(max_goals >= 0 and max_goals < 25, "fast simulation produces a plausible score")
+	_check(first.home_goals >= 0 and first.away_goals >= 0, "fast simulation result uses the recorded score")
 
 
 func _test_physics() -> void:

@@ -42,7 +42,11 @@ func load_or_new(league: LeagueData, clubs: Array[ClubData]) -> bool:
 func save() -> bool:
 	if season == null:
 		return false
-	return SaveGame.save_state({"season": season.to_dict()})
+	# Preserve the analysis history and any future save keys; a season write is
+	# an update to the save file, not a replacement of the whole file.
+	var state := SaveGame.load_state()
+	state["season"] = season.to_dict()
+	return SaveGame.save_state(state)
 
 
 func record_result(result: MatchResult) -> bool:

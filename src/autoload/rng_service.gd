@@ -32,4 +32,6 @@ func randfn(mean: float, deviation: float) -> float:
 
 
 func chance(probability: float) -> bool:
-	return randf() < probability
+	# Godot's global randf() shadows this wrapper when called unqualified inside
+	# the autoload, which would draw from a different, unseeded stream.
+	return self.randf() < probability

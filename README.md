@@ -7,12 +7,29 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 9 (playtest instrumentation) complete: the match scene has a compact HUD
-(score, clock/added time, state, last event) and `MatchStats` counts shots,
-passes, possession, goals, fouls and cards by side. Full time appends a JSON
-record to `user://fm_playtest_log.jsonl`; **P** prints the current summary to the
-event log. `tools/calibrate_playtest.py` aggregates those records. Balance changes
-remain JSON-only. Actual weight tuning is pending your playtest.
+Phase 9 (playtest instrumentation) plus the statistics/simulation layer is
+complete. The match HUD shows score, clock/added time, state, last event, a live
+team-stat strip and the selected speed step. `MatchStats` records team and
+per-player attempts/completions (passes, crosses, switches, shots, dribbles),
+touches, control time, tackles/wins, fouls, cards, saves and goals. At full time
+the match writes a `MatchRecord` to `MatchHistory` through `SaveGame`, so live
+and simulated records can be compared from the same save. **P** prints the
+current summary to the event log; the older per-match JSONL log is still written
+for `tools/calibrate_playtest.py`.
+
+Bulk analysis is the fast path: `FastMatchSimulator` resolves possessions from
+the same attribute/instruction/tactic tables as the live brain without running
+Jolt or rendering, a season in seconds. The league screen has **Sim round**,
+**Sim season** and **Analysis** buttons; played fixtures show saved stats instead
+of replaying the score. The report aggregates club and player rates and flags
+patterns such as high tackle volume with a low win rate, poor pass completion,
+low shot conversion and possession starvation. Thresholds live in the
+`simulation` and `analysis` blocks of `data/stat_effects.json`; live matches stay
+the physical truth and still run a real-time 90-minute clock at 1x.
+
+Headless suite: 235 checks passing, including seeded fast-sim determinism and
+`RngService.chance` using the seeded stream. Balance changes remain JSON-only.
+Actual weight tuning is pending your playtest.
 
 Playtest fix: the pitch now creates a real static `GroundCollider`, pills use a
 frictionless physics material, `PlayerAgent` adds proximity separation (opponents
@@ -115,14 +132,18 @@ JSON fixtures (six clubs, 108 players, 16 attributes each). To regenerate
 fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
-To play a season: open `scenes/ui/league_scene.tscn` and press Play, then click a
-fixture. In a match: **K** = debug kick, **S** = substitution, **P** = print
-stats, **L** = league screen. `scenes/match_scene.tscn` still opens directly for
-engine work.
+To play a season: open `scenes/ui/league_scene.tscn` and click an unplayed
+fixture or **Play next**. Played fixtures open their saved stats. The other
+buttons are **Sim round**, **Sim season**, **Analysis** and **Reset season**.
+In a match: **1-4** select `MatchConfig.speed_steps` (`0, 1, 2, 4` — key 2 is the
+default real-time 90 minutes), **K** = debug kick, **S** = substitution,
+**P** = print stats, **L** = league screen. `scenes/match_scene.tscn` still opens
+directly for engine work.
 
-Next: visually confirm the physics fix on the live pitch, then apply the
-calibration findings from your playtest, changing only `data/stat_effects.json`
-and `data/rules.json`.
+Next: visually confirm the HUD stat strip, speed label and league
+simulation/analysis screens on the live desktop, then apply the calibration
+findings from your playtest, changing only `data/stat_effects.json` and
+`data/rules.json`.
 
 Aggregate a playtest log with:
 

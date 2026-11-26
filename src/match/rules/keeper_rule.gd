@@ -47,5 +47,6 @@ func tick(delta: float, ctx: MatchContext) -> RuleEvent:
 		var clearance := -to_goal.normalized() + away.normalized() * 0.5
 		ball.deflect(clearance.normalized(), config.value("keeper", "save_speed_mps"))
 		cooldowns[view.player_id] = config.value("keeper", "save_cooldown_seconds")
-		return RuleEvent.create(RuleEvent.Type.SAVE, "save by %s" % view.player_id, "", view.side)
+		# offender_id carries the acting player here (the keeper), not a foul.
+		return RuleEvent.create(RuleEvent.Type.SAVE, "save by %s" % view.player_id, view.player_id, view.side)
 	return null

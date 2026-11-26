@@ -7,11 +7,14 @@ project. Update this document in the same change if a convention changes.
 
 - `data/` — hand-editable JSON fixtures: generated players/clubs/leagues plus
   `instructions.json`, `stat_effects.json` and `rules.json` for tuning.
-- `src/core/` — Resource classes, enums, config. No scene logic here.
+- `src/core/` — Resource classes, enums, config, `ActionScoring` and `MatchRecord`.
+  No scene logic here.
 - `src/autoload/` — global singletons: `GameData`, `RngService`, `MatchEvents`,
   `SaveGame`, `LeagueManager`.
-- `src/match/` — match simulation, agents, ball, rules engine and debug overlay.
-- `src/league/` — fixtures, table and season manager. No scene logic here.
+- `src/match/` — live match simulation, agents, ball, rules engine, `MatchStats`
+  and HUD.
+- `src/league/` — fixtures, table, season manager, `MatchHistory` and
+  `FastMatchSimulator`. No scene logic here.
 - `src/ui/` — one script per screen/widget in `scenes/ui/`.
 - `src/util/` — small stateless helpers (`FixtureLoader`, math).
 - `tests/` — headless assertions and the batch calibration harness.
@@ -61,8 +64,25 @@ project. Update this document in the same change if a convention changes.
   fixtures, never stored as a second source of truth. `LeagueManager` is the
   scene-facing wrapper around the headless `SeasonManager`.
 - Balance changes are JSON-only: tune `stat_effects.json` or `rules.json`, not
-  GDScript weights. `MatchStats` records playtest measurements; the calibration
-  tool only reports them.
+  GDScript weights. `MatchStats` records team and per-player playtest
+  measurements; `MatchHistory` aggregates them and the calibration tool only
+  reports them. The `simulation` and `analysis` blocks of `stat_effects.json`
+  hold every bulk-simulator rate and every issue threshold — do not hardcode
+  those in `FastMatchSimulator` or `MatchHistory`.
+- Live and bulk matches share one vocabulary: `ActionScoring` holds the pure
+  instruction/team scoring helpers; `DecisionBrain` and `FastMatchSimulator`
+  both call them. Live matches run the real Jolt physics at a real-time 90-minute
+  clock (1x); `FastMatchSimulator` is a separate statistical model for aggregate
+  analysis, never a replacement for physics. Both emit `MatchRecord`s so the
+  analysis cannot tell them apart except by the `source` field.
+- Match history is append-only in the save: `SeasonManager.save()` must preserve
+  non-season keys such as `match_history`, and `LeagueManager` is the only
+  scene-facing writer. Standings still come only from fixtures; history explains
+  them.
+- `RngService.chance()` must call `self.randf()` (not bare `randf()`): Godot's
+  global `randf()` shadows the autoload wrapper inside the singleton and would
+  draw from an unseeded stream, breaking batch reproducibility. Keep seeded
+  simulation deterministic and assert it in the headless suite.
 - The grass mesh is visual only; `Pitch` must create the `GroundCollider` from
   `MatchConfig` so the ball and pills cannot fall through the world. Player
   separation belongs in `PlayerAgent` and support lanes in `DecisionBrain`; keep

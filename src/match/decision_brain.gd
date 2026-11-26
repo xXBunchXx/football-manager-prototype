@@ -91,73 +91,15 @@ func _target_mate_for(key: String, view: RigidBody3D, ctx: MatchContext) -> Rigi
 
 
 func _instruction_score(key: String, instructions: PlayerInstructions) -> float:
-	var score := 0.0
-	match instructions.duty:
-		FMEnums.Duty.ATTACK:
-			score += effects.modifier("duty_attack", key)
-		FMEnums.Duty.DEFEND:
-			score += effects.modifier("duty_defend", key)
-	match instructions.passing_risk:
-		FMEnums.PassingRisk.RISKY:
-			score += effects.modifier("passing_risk_risky", key)
-		FMEnums.PassingRisk.SAFE:
-			score += effects.modifier("passing_risk_safe", key)
-	match instructions.pressing:
-		FMEnums.Pressing.HIGH:
-			score += effects.modifier("pressing_high", key)
-		FMEnums.Pressing.LOW:
-			score += effects.modifier("pressing_low", key)
-	match instructions.tackle_aggression:
-		FMEnums.TackleAggression.AGGRESSIVE:
-			score += effects.modifier("tackle_aggressive", key)
-		FMEnums.TackleAggression.CAUTIOUS:
-			score += effects.modifier("tackle_cautious", key)
-	# Dribble appetite is applied in _context_score only when the ball is at
-	# the player's feet; otherwise attackers would walk to the goal without it.
-	if key != "dribble":
-		match instructions.runs:
-			FMEnums.Runs.FORWARD:
-				score += effects.modifier("runs_forward", key)
-			FMEnums.Runs.HOLD:
-				score += effects.modifier("runs_hold", key)
-	match instructions.width:
-		FMEnums.WidthMode.WIDE:
-			score += effects.modifier("width_wide", key)
-		FMEnums.WidthMode.NARROW:
-			score += effects.modifier("width_narrow", key)
-	if instructions.man_mark:
-		score += effects.modifier("man_mark", key)
-	return score
+	# Shared with the bulk simulator; dribble appetite stays a context bonus so
+	# attackers do not sprint to goal from the other end without the ball.
+	return ActionScoring.instruction_bonus(key, instructions, effects)
 
 
 ## Team-wide tactics share the same modifier tables, so later tuning can bias
 ## crossing, switching or tempo without adding per-branch logic here.
 func _team_instruction_score(key: String, view: RigidBody3D, ctx: MatchContext) -> float:
-	var team := ctx.team_instructions_for(view)
-	if team == null:
-		return 0.0
-	var score := 0.0
-	match team.mentality:
-		FMEnums.Mentality.ATTACKING:
-			score += effects.modifier("mentality_attacking", key)
-		FMEnums.Mentality.DEFENSIVE:
-			score += effects.modifier("mentality_defensive", key)
-	match team.tempo:
-		FMEnums.Tempo.FAST:
-			score += effects.modifier("tempo_fast", key)
-		FMEnums.Tempo.SLOW:
-			score += effects.modifier("tempo_slow", key)
-	match team.passing_style:
-		FMEnums.PassingStyle.DIRECT:
-			score += effects.modifier("passing_style_direct", key)
-		FMEnums.PassingStyle.SHORT:
-			score += effects.modifier("passing_style_short", key)
-	match team.width:
-		FMEnums.WidthMode.WIDE:
-			score += effects.modifier("team_width_wide", key)
-		FMEnums.WidthMode.NARROW:
-			score += effects.modifier("team_width_narrow", key)
-	return score
+	return ActionScoring.team_bonus(key, ctx.team_instructions_for(view), effects)
 
 
 func _stamina_score(key: String, state: PlayerState) -> float:

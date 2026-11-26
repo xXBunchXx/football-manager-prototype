@@ -10,6 +10,8 @@ const PLAYTEST_LOG_PATH := "user://fm_playtest_log.jsonl"
 @onready var score_label: Label = $HUD/Panel/Layout/ScoreLabel
 @onready var clock_label: Label = $HUD/Panel/Layout/ClockLabel
 @onready var event_label: Label = $HUD/Panel/Layout/EventLabel
+@onready var stats_label: Label = $HUD/Panel/Layout/StatsLabel
+@onready var speed_label: Label = $HUD/Panel/Layout/SpeedLabel
 
 var player_views: Array[RigidBody3D] = []
 var agents: Array[PlayerAgent] = []
@@ -22,6 +24,7 @@ var stats := MatchStats.new()
 var fixture_id: String = ""
 var home_club_id: String = ""
 var away_club_id: String = ""
+var pending_pass: Dictionary = {}
 
 
 func _ready() -> void:
@@ -37,7 +40,10 @@ func _ready() -> void:
 	_spawn_teams()
 	for view in player_views:
 		match_ctx.add_view(view)
-		agents.append(PlayerAgent.new(view, brain, match_ctx, effects))
+		var agent := PlayerAgent.new(view, brain, match_ctx, effects)
+		agent.tackle_attempted.connect(_on_tackle_attempted_for_stats)
+		agent.tackle_won.connect(_on_tackle_won_for_stats)
+		agents.append(agent)
 	var rules_config := RulesConfig.load()
 	if rules_config == null:
 		push_error("MatchScene: could not load rules config")
@@ -46,6 +52,7 @@ func _ready() -> void:
 	rules_engine.setup(match_ctx, effects, rules_config)
 	rules_engine.event_raised.connect(_on_rule_event)
 	ball.kick_performed.connect(_on_ball_kicked_for_stats)
+	ball.control_changed.connect(_on_ball_control_changed_for_stats)
 	_refresh_hud()
 	var camera := find_child("MatchCamera", true, false) as CameraRig
 	if camera != null:
@@ -59,16 +66,58 @@ func _physics_process(delta: float) -> void:
 	if rules_engine != null:
 		rules_engine.tick(delta)
 	if ball.control_owner != null:
-		stats.record_control(ball.control_owner.side, delta)
+		stats.record_control(ball.control_owner.side, delta, ball.control_owner.player_id)
 	_refresh_hud()
 
 
 func _on_ball_kicked_for_stats(kicker: RigidBody3D, is_pass: bool) -> void:
-	stats.record_kick(kicker.side, is_pass)
+	var action_key := ""
+	var target_id := ""
+	if kicker.last_decision != null:
+		action_key = kicker.last_decision.best_action_name()
+		target_id = kicker.last_decision.pass_to_id
+	stats.record_kick(kicker.side, is_pass, action_key, kicker.player_id, target_id)
+	if is_pass:
+		pending_pass = {
+			"kicker_id": kicker.player_id,
+			"side": kicker.side,
+			"target_id": target_id,
+		}
+	else:
+		pending_pass.clear()
+
+
+## A pass is completed when the next player to control the ball is a team-mate.
+## An interception or dead ball clears the pending pass instead of crediting it.
+func _on_ball_control_changed_for_stats(player: RigidBody3D) -> void:
+	if player == null:
+		return
+	stats.record_touch(player.player_id, player.side)
+	if pending_pass.is_empty():
+		return
+	var kicker_id := String(pending_pass.get("kicker_id", ""))
+	var side_value := int(pending_pass.get("side", -1))
+	if player.side != side_value or player.player_id == kicker_id:
+		pending_pass.clear()
+		return
+	stats.record_pass_completion(kicker_id, player.player_id, side_value, String(pending_pass.get("target_id", "")))
+	pending_pass.clear()
+
+
+func _on_tackle_attempted_for_stats(player: RigidBody3D) -> void:
+	stats.record_tackle_attempt(player.player_id, player.side)
+
+
+func _on_tackle_won_for_stats(player: RigidBody3D) -> void:
+	stats.record_tackle_win(player.player_id, player.side)
 
 
 func _on_rule_event(event: RuleEvent) -> void:
+	if event.type == RuleEvent.Type.GOAL and ball.last_kicker != null and ball.last_kicker.side == event.side:
+		event.offender_id = ball.last_kicker.player_id
 	stats.record_event(event)
+	if event.type == RuleEvent.Type.RESTART or event.type == RuleEvent.Type.FOUL or event.type == RuleEvent.Type.OFFSIDE:
+		pending_pass.clear()
 	MatchEvents.log_event("[rules] %s" % event.description)
 	if event.type != RuleEvent.Type.FULL_TIME or fixture_id.is_empty():
 		return
@@ -80,6 +129,8 @@ func _on_rule_event(event: RuleEvent) -> void:
 		MatchEvents.log_event("[league] recorded %d-%d for %s" % [result.home_goals, result.away_goals, fixture_id])
 	else:
 		MatchEvents.log_event("[league] result was not recorded")
+	var record := MatchRecord.from_match(fixture, result, stats.to_dict(), "live")
+	LeagueManager.record_match(record)
 	_append_playtest_record(result)
 	MatchEvents.log_event("[stats] %s" % stats.summary())
 
@@ -94,6 +145,12 @@ func request_home_substitution() -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		match event.keycode:
+			KEY_1: _set_speed_step(0)
+			KEY_2: _set_speed_step(1)
+			KEY_3: _set_speed_step(2)
+			KEY_4: _set_speed_step(3)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
 		ball.apply_kick(Vector3(1, 0, 0), 18.0, 12.0, 0.0, 60.0)
 		MatchEvents.log_event("debug kick: +X, 18 m/s, 12 deg loft, spin 60")
@@ -103,6 +160,25 @@ func _input(event: InputEvent) -> void:
 		MatchEvents.log_event("[stats] %s" % stats.summary())
 	if event is InputEventKey and event.pressed and event.keycode == KEY_L:
 		get_tree().change_scene_to_file("res://scenes/ui/league_scene.tscn")
+
+
+## 1-4 select the MatchConfig.speed_steps entries. Live speed uses the engine
+## clock, so the 90-minute scoreboard still counts true match minutes; only
+## wall-clock presentation changes. Bulk simulation is the fast analysis path.
+func _set_speed_step(index: int) -> void:
+	var steps: Array = GameData.config.speed_steps
+	if index < 0 or index >= steps.size():
+		return
+	Engine.time_scale = maxf(float(steps[index]), 0.0)
+	if speed_label != null:
+		var value := float(steps[index])
+		speed_label.text = "Speed: paused" if value <= 0.0 else "Speed: %.0fx (1-4)" % value
+	var speed_text := "changed" if speed_label == null else speed_label.text
+	MatchEvents.log_event("[speed] %s" % speed_text)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 func _read_selected_fixture() -> void:
@@ -172,6 +248,14 @@ func _refresh_hud() -> void:
 	var clock_text := rules_engine.clock_rule.formatted() if rules_engine != null else "00:00 (+0)"
 	var state_text := _state_name(rules_engine.state) if rules_engine != null else "IDLE"
 	clock_label.text = "%s  %s" % [clock_text, state_text]
+	if stats_label != null:
+		var home: Dictionary = stats.get_side(FMEnums.Side.HOME)
+		var away: Dictionary = stats.get_side(FMEnums.Side.AWAY)
+		stats_label.text = "Passes %d/%d  Tackles %d/%d  Shots %d-%d" % [
+			int(home["passes_completed"]), int(home["passes_attempted"]),
+			int(home["tackle_wins"]), int(home["tackles"]),
+			int(home["shots"]), int(away["shots"]),
+		]
 	var latest := ""
 	for line in MatchEvents.recent:
 		if line.begins_with("[rules]") or line.begins_with("[league]") or line.begins_with("[stats]"):

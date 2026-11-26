@@ -5,6 +5,9 @@ extends RefCounted
 ## when the ball is within control range. Decisions are refreshed at the config
 ## interval; steering runs every physics frame for smooth motion.
 
+signal tackle_attempted(player: RigidBody3D)
+signal tackle_won(player: RigidBody3D)
+
 var view: RigidBody3D
 var brain: DecisionBrain
 var ctx: MatchContext
@@ -26,6 +29,9 @@ func physics_tick(delta: float) -> void:
 	kick_timer = maxf(0.0, kick_timer - delta)
 	tackle_timer = maxf(0.0, tackle_timer - delta)
 	tackle_backoff_timer = maxf(0.0, tackle_backoff_timer - delta)
+	if view.match_state != null:
+		var flat_velocity := Vector3(view.linear_velocity.x, 0.0, view.linear_velocity.z)
+		view.match_state.add_distance(flat_velocity.length() * delta)
 	# Dead-ball phases are placed by RestartRule; agents must not run off to an
 	# old target while the restart is being taken.
 	if ctx != null and ctx.match_state != FMEnums.MatchState.PLAYING:
@@ -172,6 +178,8 @@ func _execute_ball_action() -> void:
 		FMEnums.Action.SHOOT:
 			ball.release_control()
 			ball.apply_player_kick(view, false, forward, _scaled_speed(GameData.config.shot_speed_mps), GameData.config.shot_loft_degrees, _scatter(), 0.0)
+			if view.match_state != null:
+				view.match_state.shots_taken += 1
 			MatchEvents.log_event("%s shoots" % view.player_id)
 		FMEnums.Action.PASS:
 			ball.release_control()
@@ -187,6 +195,8 @@ func _execute_ball_action() -> void:
 			)
 			var scatter := _scatter() * effects.context_value("pass_scatter_scale")
 			ball.apply_player_kick(view, true, pass_direction, pass_speed, cfg.pass_loft_degrees, scatter, 0.0)
+			if view.match_state != null:
+				view.match_state.passes_attempted += 1
 			MatchEvents.log_event("%s passes to %s" % [view.player_id, decision.pass_to_id])
 		FMEnums.Action.CROSS, FMEnums.Action.SWITCH:
 			ball.release_control()
@@ -207,6 +217,8 @@ func _execute_ball_action() -> void:
 				view, true, cross_direction, strike_speed, loft,
 				_scatter() * effects.context_value("pass_scatter_scale"), 0.0
 			)
+			if view.match_state != null:
+				view.match_state.passes_attempted += 1
 			MatchEvents.log_event("%s %s to %s" % [
 				view.player_id, "crosses" if is_cross else "switches play", decision.pass_to_id,
 			])
@@ -217,12 +229,16 @@ func _execute_ball_action() -> void:
 			if tackle_timer > 0.0:
 				return
 			tackle_timer = effects.context_value("tackle_challenge_cooldown_seconds")
+			if view.match_state != null:
+				view.match_state.tackles_attempted += 1
+			tackle_attempted.emit(view)
 			if tackling_carrier:
 				if not RngService.chance(effects.context_value("tackle_success_chance")):
 					tackle_backoff_timer = effects.context_value("tackle_backoff_seconds")
 					MatchEvents.log_event("%s is beaten by the carrier" % view.player_id)
 					return
 			ball.set_control(view, feet)
+			tackle_won.emit(view)
 			MatchEvents.log_event("%s tackles" % view.player_id)
 		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK:
 			ball.set_control(view, feet)
