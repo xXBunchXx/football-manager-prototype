@@ -7,19 +7,23 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 3 (pitch and pill players) complete: `scenes/pitch.tscn` with procedural
-markings/goals, `scenes/match_scene.tscn` spawning 22 `RigidBody3D` capsule
-players in 4-3-3 shape, and a camera rig with broadcast/top-down/follow modes
-(keys 1/2/3). No ball physics or AI yet.
+Phase 4 (ball physics) complete: `scenes/ball.tscn` is an always-physical
+`RigidBody3D` ball. Kicks/headers are impulses with loft, scatter and side spin;
+a Magnus force curves spinning shots. Possession is steering-force control
+(toward a point at the player's feet, no reparenting). `PitchBounds.classify()`
+does code-based goal/out-of-play checks. Press **K** in the match scene for a
+debug kick. No AI or match rules yet.
 
-Earlier phases: typed Resources (`PlayerData`, `StatProfile`, `ClubData`,
-`LeagueData`) loaded from JSON fixtures; six clubs, 108 players, 16 attributes
-each. To regenerate/rebalance fixtures, edit `tools/generate_fixtures.py` and run
+Earlier phases: `scenes/pitch.tscn` with procedural markings/goals, 22
+`RigidBody3D` capsule players in 4-3-3, camera modes on keys 1/2/3; typed
+Resources (`PlayerData`, `StatProfile`, `ClubData`, `LeagueData`) loaded from
+JSON fixtures (six clubs, 108 players, 16 attributes each). To regenerate
+fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
-To look at the match: open `scenes/match_scene.tscn` and press Play.
+To look at the match: open `scenes/match_scene.tscn` and press Play (K = kick).
 
-Next: phase 4, ball physics and the kick/header API.
+Next: phase 5, per-player instructions and player state.
 
 ## Run the checks
 

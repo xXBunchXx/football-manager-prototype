@@ -13,6 +13,7 @@ func _ready() -> void:
 	_test_config()
 	_test_data()
 	_test_match_scene()
+	await _test_ball()
 	_test_rng()
 	_test_events()
 	_test_save()
@@ -156,7 +157,56 @@ func _test_match_scene() -> void:
 	_check(views.size() == 22, "match scene spawns 22 players")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
-	instance.queue_free()
+	instance.free()
+
+
+func _test_ball() -> void:
+	var cfg := GameData.config
+	_check(PitchBounds.classify(Vector3.ZERO, cfg) == PitchBounds.Result.IN_PLAY, "bounds: centre in play")
+	_check(PitchBounds.classify(Vector3(cfg.pitch_length_m * 0.5 + 1.0, 1.0, 0.0), cfg) == PitchBounds.Result.GOAL_HOME, "bounds: home goal")
+	_check(PitchBounds.classify(Vector3(-cfg.pitch_length_m * 0.5 - 1.0, 1.0, 0.0), cfg) == PitchBounds.Result.GOAL_AWAY, "bounds: away goal")
+	_check(PitchBounds.classify(Vector3(0.0, 1.0, cfg.pitch_width_m * 0.5 + 1.0), cfg) == PitchBounds.Result.OUT_TOUCHLINE, "bounds: touchline")
+	_check(PitchBounds.classify(Vector3(cfg.pitch_length_m * 0.5 + 1.0, 1.0, cfg.goal_width_m), cfg) == PitchBounds.Result.OUT_GOAL_LINE, "bounds: goal line outside posts")
+
+	var packed: PackedScene = load("res://scenes/ball.tscn")
+	var ball := packed.instantiate() as Ball
+	_check(ball != null, "ball scene resource loads")
+	if ball == null:
+		return
+	add_child(ball)
+	# The first physics frame after adding a body initialises it; impulses
+	# applied before that are not integrated until the following step.
+	await get_tree().physics_frame
+	ball.reset_to(Vector3(0, 1, 0))
+
+	ball.apply_kick(Vector3(1, 0, 0), 10.0, 0.0, 0.0, 0.0)
+	await get_tree().physics_frame
+	_check(ball.linear_velocity.x > 5.0 and absf(ball.linear_velocity.z) < 0.01, "kick impulse travels along +X")
+	var first_speed := ball.linear_velocity.length()
+
+	ball.reset_to(Vector3(0, 1, 0))
+	ball.apply_kick(Vector3(1, 0, 0), 20.0, 0.0, 0.0, 0.0)
+	await get_tree().physics_frame
+	_check(ball.linear_velocity.length() > first_speed, "higher kick speed raises ball velocity")
+
+	ball.reset_to(Vector3(0, 1, 0))
+	ball.apply_kick(Vector3(1, 0, 0), 15.0, 0.0, 0.0, 80.0)
+	_check(absf(ball.spin.y - 80.0) < 0.01, "kick sets side spin")
+	var start_z := ball.global_position.z
+	for i in 5:
+		await get_tree().physics_frame
+	_check(absf(ball.global_position.z - start_z) > 0.001, "Magnus force curves the ball")
+
+	ball.reset_to(Vector3(0, 1, 0))
+	var dummy := RigidBody3D.new()
+	add_child(dummy)
+	ball.set_control(dummy, Vector3(4, 1, 0))
+	for i in 10:
+		await get_tree().physics_frame
+	_check(ball.global_position.x > 0.05, "control steering moves ball toward target")
+	ball.release_control()
+	dummy.free()
+	ball.free()
 
 
 func _average_tier(tier: int) -> float:

@@ -11,6 +11,18 @@ extends Resource
 
 @export var ball_radius_m: float = 0.11
 @export var ball_mass_kg: float = 0.43
+@export var ball_linear_damp: float = 0.12
+@export var ball_angular_damp: float = 0.3
+@export var ball_bounce: float = 0.35
+@export var ball_friction: float = 0.4
+@export var max_ball_speed_mps: float = 35.0
+
+@export var possession_radius_m: float = 1.2
+@export var control_acceleration: float = 45.0
+@export var control_damping: float = 7.0
+
+@export var magnus_coefficient: float = 0.0008
+@export var spin_decay_per_second: float = 0.8
 
 @export var physics_ticks_per_second: int = 60
 @export var decision_ticks_per_second: float = 6.0

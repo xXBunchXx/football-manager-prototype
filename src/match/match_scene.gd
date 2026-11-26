@@ -19,11 +19,22 @@ const FORMATION: Array[Vector2] = [
 	Vector2(18, 28),    # RW
 ]
 
+@onready var ball: Ball = $Ball
+
 var player_views: Array[RigidBody3D] = []
 
 
 func _ready() -> void:
 	_spawn_teams()
+	var camera := find_child("MatchCamera", true, false)
+	if camera != null and camera.has_method("set_follow_target"):
+		camera.set_follow_target(ball)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
+		ball.apply_kick(Vector3(1, 0, 0), 18.0, 12.0, 0.0, 60.0)
+		MatchEvents.log_event("debug kick: +X, 18 m/s, 12 deg loft, spin 60")
 
 
 func _spawn_teams() -> void:
@@ -51,3 +62,7 @@ func _spawn_teams() -> void:
 
 func get_player_views() -> Array[RigidBody3D]:
 	return player_views
+
+
+func get_ball() -> Ball:
+	return ball
