@@ -4,7 +4,9 @@ extends RefCounted
 ## Shared enums and physics-layer constants.
 ## Keep enum members UPPER_SNAKE_CASE and reference them as FMEnums.<Enum>.<MEMBER>.
 
-enum MatchState { IDLE, PRE_MATCH, KICKOFF, PLAYING, GOAL, HALF_TIME, FULL_TIME }
+enum MatchState { IDLE, PRE_MATCH, KICKOFF, PLAYING, GOAL, HALF_TIME, FULL_TIME, RESTART, SUBSTITUTION }
+
+enum RestartType { KICKOFF, THROW_IN, GOAL_KICK, CORNER, FREE_KICK, PENALTY }
 
 enum Action { NONE, SUPPORT, PRESS, CHASE, DRIBBLE, PASS, SHOOT, HEADER, TACKLE, MARK, CLEAR, CROSS }
 

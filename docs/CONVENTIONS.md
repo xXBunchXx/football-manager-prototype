@@ -6,7 +6,7 @@ project. Update this document in the same change if a convention changes.
 ## Layout
 
 - `data/` — hand-editable JSON fixtures: generated players/clubs/leagues plus
-  `instructions.json` for tactical overrides.
+  `instructions.json`, `stat_effects.json` and `rules.json` for tuning.
 - `src/core/` — Resource classes, enums, config. No scene logic here.
 - `src/autoload/` — global singletons: `GameData`, `RngService`, `MatchEvents`, `SaveGame`.
 - `src/match/` — match simulation, agents, ball, rules engine and debug overlay.
@@ -43,12 +43,18 @@ project. Update this document in the same change if a convention changes.
 
 ## Data rules
 
-- No magic numbers in logic. Tuning goes in `MatchConfig` or `data/stat_effects.json`.
+- No magic numbers in logic. Tuning goes in `MatchConfig`,
+  `data/stat_effects.json` (decisions and movement) or `data/rules.json`
+  (officiating, restarts and clock).
 - Decisions are utility scores: `DecisionBrain` combines action base scores,
   attribute weights and instruction modifiers from `stat_effects.json`. Never
   add a hardcoded weight to the brain — put it in that JSON instead.
 - JSON is the source of truth for generated content; `FixtureLoader` validates it
-  and constructs typed Resources. User-created content is saved as JSON in `user://`.
+  and constructs typed Resources. `StatEffects` and `RulesConfig` are the typed
+  views for the two tuning files. User-created content is saved as JSON in `user://`.
+- Rules live in one class per concern under `src/match/rules/`; `RulesEngine`
+  orchestrates them, owns match state and raises `RuleEvent`s. Rule classes stay
+  headless-testable: the scene owns presentation and body placement.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

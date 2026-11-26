@@ -4,10 +4,18 @@ extends RigidBody3D
 ## Always-physical ball. Kicks and headers are impulses; control is a steering
 ## force toward a target point, never a parent/child reparent.
 
+signal control_changed(player: RigidBody3D)
+signal kick_performed(kicker: RigidBody3D, is_pass: bool)
+
 var spin: Vector3 = Vector3.ZERO
 var is_controlled: bool = false
 var control_owner: RigidBody3D = null
 var control_target: Vector3 = Vector3.ZERO
+
+var match_time: float = 0.0
+var last_kicker: RigidBody3D = null
+var last_kick_time: float = -1.0
+var last_kick_was_pass: bool = false
 
 
 func _physics_process(delta: float) -> void:
@@ -50,15 +58,31 @@ func apply_header(direction: Vector3, speed_mps: float, loft_degrees: float, sca
 	apply_kick(direction, speed_mps, loft_degrees, scatter_degrees, spin_rad_per_sec)
 
 
+## Player-initiated kick: records who played the ball so the rules engine can
+## judge offside, throw-ins and goal kicks.
+func apply_player_kick(kicker: RigidBody3D, is_pass: bool, direction: Vector3, speed_mps: float, loft_degrees: float, scatter_degrees: float, spin_rad_per_sec: float) -> void:
+	last_kicker = kicker
+	last_kick_time = match_time
+	last_kick_was_pass = is_pass
+	kick_performed.emit(kicker, is_pass)
+	apply_kick(direction, speed_mps, loft_degrees, scatter_degrees, spin_rad_per_sec)
+
+
 func set_control(player: RigidBody3D, target: Vector3) -> void:
+	var previous := control_owner
 	is_controlled = true
 	control_owner = player
 	control_target = target
+	if previous != player:
+		control_changed.emit(player)
 
 
 func release_control() -> void:
+	var previous := control_owner
 	is_controlled = false
 	control_owner = null
+	if previous != null:
+		control_changed.emit(null)
 
 
 func reset_to(position: Vector3) -> void:

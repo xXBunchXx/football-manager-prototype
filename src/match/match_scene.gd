@@ -1,7 +1,7 @@
 extends Node3D
 
-## Spawns the two teams in a 4-3-3 shape for the current phase. Match rules and
-## AI will be layered on in later phases.
+## Spawns the two teams in a 4-3-3 shape and wires steering agents and the
+## rules engine into the match.
 
 const PLAYER_SCENE := preload("res://scenes/player_view.tscn")
 
@@ -26,6 +26,7 @@ var agents: Array[PlayerAgent] = []
 var match_ctx: MatchContext = null
 var brain: DecisionBrain = null
 var effects: StatEffects = null
+var rules_engine: RulesEngine = null
 
 
 func _ready() -> void:
@@ -41,6 +42,13 @@ func _ready() -> void:
 	for view in player_views:
 		match_ctx.add_view(view)
 		agents.append(PlayerAgent.new(view, brain, match_ctx, effects))
+	var rules_config := RulesConfig.load()
+	if rules_config == null:
+		push_error("MatchScene: could not load rules config")
+		return
+	rules_engine = RulesEngine.new()
+	rules_engine.setup(match_ctx, effects, rules_config)
+	rules_engine.event_raised.connect(_on_rule_event)
 	var camera := find_child("MatchCamera", true, false)
 	if camera != null and camera.has_method("set_follow_target"):
 		camera.set_follow_target(ball)
@@ -49,12 +57,29 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	for agent in agents:
 		agent.physics_tick(delta)
+	if rules_engine != null:
+		rules_engine.tick(delta)
+
+
+func _on_rule_event(event: RuleEvent) -> void:
+	MatchEvents.log_event("[rules] %s" % event.description)
+
+
+func request_home_substitution() -> bool:
+	if rules_engine == null or GameData.clubs.is_empty():
+		return false
+	var club: ClubData = GameData.clubs[FMEnums.Side.HOME]
+	var outgoing: String = String(club.get_starters()[9].id)
+	var incoming: String = String(club.get_bench()[0].id)
+	return rules_engine.request_substitution(club.id, outgoing, incoming)
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
 		ball.apply_kick(Vector3(1, 0, 0), 18.0, 12.0, 0.0, 60.0)
 		MatchEvents.log_event("debug kick: +X, 18 m/s, 12 deg loft, spin 60")
+	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
+		MatchEvents.log_event("substitution requested: %s" % str(request_home_substitution()))
 
 
 func _spawn_teams() -> void:
@@ -94,3 +119,7 @@ func get_agents() -> Array[PlayerAgent]:
 
 func get_context() -> MatchContext:
 	return match_ctx
+
+
+func get_rules_engine() -> RulesEngine:
+	return rules_engine

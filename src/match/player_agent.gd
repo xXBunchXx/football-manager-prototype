@@ -66,7 +66,7 @@ func _execute_ball_action() -> void:
 	match decision.action:
 		FMEnums.Action.SHOOT:
 			ball.release_control()
-			ball.apply_kick(forward, _scaled_speed(GameData.config.shot_speed_mps), GameData.config.shot_loft_degrees, _scatter(), 0.0)
+			ball.apply_player_kick(view, false, forward, _scaled_speed(GameData.config.shot_speed_mps), GameData.config.shot_loft_degrees, _scatter(), 0.0)
 			MatchEvents.log_event("%s shoots" % view.player_id)
 		FMEnums.Action.PASS:
 			ball.release_control()
@@ -77,7 +77,7 @@ func _execute_ball_action() -> void:
 						pass_direction = mate.global_position - view.global_position
 						pass_direction.y = 0.0
 						pass_direction = pass_direction.normalized()
-			ball.apply_kick(pass_direction, GameData.config.pass_speed_mps, GameData.config.pass_loft_degrees, _scatter() * 0.5, 0.0)
+			ball.apply_player_kick(view, true, pass_direction, GameData.config.pass_speed_mps, GameData.config.pass_loft_degrees, _scatter() * 0.5, 0.0)
 			MatchEvents.log_event("%s passes to %s" % [view.player_id, decision.pass_to_id])
 		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK, FMEnums.Action.TACKLE:
 			ball.set_control(view, feet)

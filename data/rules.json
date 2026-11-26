@@ -1,0 +1,33 @@
+{
+  "foul": {
+    "tackle_cooldown_seconds": 1.0,
+    "closing_speed_threshold_mps": 3.0,
+    "base_chance": 0.08,
+    "closing_speed_bonus_per_mps": 0.02,
+    "aggression_bonus": 0.06,
+    "skill_reduction_per_point": 0.004,
+    "yellow_chance": 0.35,
+    "red_chance": 0.05
+  },
+  "offside": {
+    "tolerance_m": 0.5
+  },
+  "restart": {
+    "free_kick_offset_m": 1.0,
+    "corner_offset_m": 1.0,
+    "throw_in_offset_m": 1.0,
+    "penalty_spot_m": 11.0,
+    "goal_kick_depth_m": 5.0,
+    "boundary_inset_m": 1.0
+  },
+  "substitution": {
+    "max_per_club": 5
+  },
+  "clock": {
+    "stoppage_per_foul_seconds": 20.0,
+    "stoppage_per_goal_seconds": 30.0,
+    "stoppage_per_card_seconds": 25.0,
+    "stoppage_per_substitution_seconds": 20.0,
+    "restart_delay_seconds": 1.0
+  }
+}

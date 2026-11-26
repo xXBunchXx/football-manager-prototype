@@ -7,7 +7,14 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 6 (decision layer) complete: `DecisionBrain` scores eight actions from
+Phase 7 (match rules) complete: `RulesEngine` orchestrates small, independent
+rule classes under `src/match/rules/`. Offside is judged at the pass and resolved
+at first touch; tackle-based fouls roll cards through `PlayerState`; all six
+restarts place the ball from `data/rules.json`; substitutions are capped per club;
+stoppage is banked as added time. Press **K** for a debug kick and **S** to
+request a home substitution.
+
+Earlier: Phase 6 (decision layer) — `DecisionBrain` scores eight actions from
 attribute weights, instruction modifiers and context thresholds in
 `data/stat_effects.json`; the highest score drives each player's target and
 action. `PlayerAgent` steers `RigidBody3D` players with forces toward that
@@ -28,7 +35,7 @@ Phase 4: `scenes/ball.tscn` is an always-physical
 a Magnus force curves spinning shots. Possession is steering-force control
 (toward a point at the player's feet, no reparenting). `PitchBounds.classify()`
 does code-based goal/out-of-play checks. Press **K** in the match scene for a
-debug kick. No match rules yet.
+debug kick; rules are layered on separately by `RulesEngine`.
 
 Earlier phases: `scenes/pitch.tscn` with procedural markings/goals, 22
 `RigidBody3D` capsule players in 4-3-3, camera modes on keys 1/2/3; typed
@@ -37,10 +44,10 @@ JSON fixtures (six clubs, 108 players, 16 attributes each). To regenerate
 fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
-To look at the match: open `scenes/match_scene.tscn` and press Play (K = kick).
+To look at the match: open `scenes/match_scene.tscn` and press Play
+(K = debug kick, S = substitution).
 
-Next: phase 7, match rules — offside, fouls/cards, restarts, substitutions and
-added time.
+Next: phase 8, the league layer — fixtures, standings and season progression.
 
 ## Run the checks
 
