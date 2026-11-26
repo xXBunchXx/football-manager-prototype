@@ -99,10 +99,12 @@ project. Update this document in the same change if a convention changes.
   (`pass_travel_seconds`, `pass_min_speed_mps`, `pass_speed_mps`), never a single
   fixed value.
 - A defender within `tackle_radius_m` may take control from an opponent carrier
-  even though he is not the closest player to the ball. `FoulRule` must roll once
-  per challenge (`foul.tackle_cooldown_seconds`) and `KeeperRule` must emit a
-  `RuleEvent.Type.SAVE` via `Ball.deflect()`; keep keeper radii and speeds in
-  `rules.json` and saves in `MatchStats`.
+  even though he is not the closest player to the ball, but only the closest
+  defender per side gets the tackle bonus (`ball_chaser_rank()` +
+  `tackle_rank_penalty_per_place`); otherwise the carrier gets glued into a scrum.
+  `FoulRule` must roll once per challenge (`foul.tackle_cooldown_seconds`) and
+  `KeeperRule` must emit a `RuleEvent.Type.SAVE` via `Ball.deflect()`; keep keeper
+  radii and speeds in `rules.json` and saves in `MatchStats`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

@@ -50,12 +50,13 @@ and `MatchConfig`.
 
 Play-rate fix: a pass or shot now fires at most once every
 `kick_cooldown_seconds` instead of every physics frame, and passes are aimed at
-an open forward team-mate with a strike speed scaled to the distance. A defender
-within `tackle_radius_m` can actually win the ball from the carrier, and
-`KeeperRule` parries shots heading into the goal; saves are counted in the
-playtest log. `FoulRule` rolls once per challenge rather than every frame, so
-tackles no longer produce a free kick every few seconds. All new thresholds are
-in `data/stat_effects.json`, `data/rules.json` and `MatchConfig`.
+an open forward team-mate with a strike speed scaled to the distance. Only the
+closest defender on each side challenges within `tackle_radius_m` (later team-mates
+are penalised by `tackle_rank_penalty_per_place`), and that defender can actually
+win the ball from the carrier. `KeeperRule` parries shots heading into the goal;
+saves are counted in the playtest log. `FoulRule` rolls once per challenge rather
+than every frame, so tackles no longer produce a free kick every few seconds. All
+new thresholds are in `data/stat_effects.json`, `data/rules.json` and `MatchConfig`.
 
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click

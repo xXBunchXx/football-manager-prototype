@@ -148,10 +148,17 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 				score -= effects.context_value("chase_out_of_range_penalty")
 		"tackle":
 			var carrier := ctx.ball_carrier()
-			if carrier != null and carrier != view:
+			if carrier != null and carrier != view and carrier.side != view.side:
 				var distance := MatchContext.flat_distance(view.global_position, carrier.global_position)
 				if distance < effects.context_value("tackle_radius_m"):
-					score += effects.context_value("tackle_proximity_bonus")
+					# Only the closest defender on each side challenges. Without
+					# this, every nearby pill picks TACKLE and the carrier ends up
+					# pinned by a scrum of two or three markers.
+					var rank := ctx.ball_chaser_rank(view)
+					if rank == 0:
+						score += effects.context_value("tackle_proximity_bonus")
+					else:
+						score -= float(rank) * effects.context_value("tackle_rank_penalty_per_place")
 		"pass":
 			if ctx.is_pressured(view, effects.context_value("pressure_radius_m")):
 				score += effects.context_value("pressure_pass_bonus")

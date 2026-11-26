@@ -46,6 +46,7 @@
     "press_proximity_bonus": 3.0,
     "tackle_radius_m": 2.5,
     "tackle_proximity_bonus": 12.0,
+    "tackle_rank_penalty_per_place": 14.0,
     "pressure_radius_m": 3.0,
     "pressure_pass_bonus": 3.0,
     "mark_proximity_bonus": 2.0,

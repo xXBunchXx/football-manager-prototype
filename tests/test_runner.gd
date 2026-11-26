@@ -396,10 +396,17 @@ func _test_decisions() -> void:
 	_check(ball.last_kick_was_pass, "agent records the strike as a pass")
 	_check(pass_speed >= cfg.pass_min_speed_mps - 0.1 and pass_speed <= cfg.pass_speed_mps + 0.1, "pass speed is scaled within the tuned bounds (%.1f m/s)" % pass_speed)
 
-	# A defender who closes onto the carrier can actually win the tackle.
-	var tackler := _make_view(weak_club.get_starters()[6], weak_club, false, chaser.global_position + Vector3(0.0, 0.0, 0.6), ctx)
+	# A defender who closes onto the carrier can actually win the tackle, but
+	# only the closest one challenges; a second defender must not glue on too.
 	ball.reset_to(chaser.global_position + Vector3(0.2, 0.0, 0.0))
 	ball.set_control(chaser, ball.global_position)
+	var tackler := _make_view(weak_club.get_starters()[6], weak_club, false, chaser.global_position + Vector3(0.0, 0.0, 0.6), ctx)
+	var shadow := _make_view(weak_club.get_starters()[6], weak_club, false, chaser.global_position + Vector3(0.0, 0.0, 2.2), ctx)
+	var close_tackle := float(brain.decide(tackler, ctx).scores["tackle"])
+	var distant_tackle := float(brain.decide(shadow, ctx).scores["tackle"])
+	_check(close_tackle > distant_tackle + effects.context_value("tackle_rank_penalty_per_place") * 0.5, "only the nearest defender gets the tackle bonus")
+	ctx.views.erase(shadow)
+	shadow.free()
 	var tackle_agent := PlayerAgent.new(tackler, brain, ctx, effects)
 	tackle_agent.decision_timer = 10.0
 	tackler.last_decision = DecisionResult.create(FMEnums.Action.TACKLE, chaser.global_position, {}, "")
