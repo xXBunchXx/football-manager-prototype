@@ -118,23 +118,64 @@ func is_pressured(view: RigidBody3D, radius: float) -> bool:
 	return nearest_opponent(view, radius) != null
 
 
-func best_pass_target(view: RigidBody3D, forward_weight: float, space_weight: float) -> RigidBody3D:
+## Pick a team-mate for a pass. The tuning dictionary is StatEffects.context so
+## all weights stay in data/stat_effects.json. Short sideways passes to a
+## overlapping foot are rejected; the ball should go forward into space.
+func best_pass_target(view: RigidBody3D, tuning: Dictionary) -> RigidBody3D:
 	var best: RigidBody3D = null
 	var best_score := -INF
 	var sign := attack_sign(view)
+	var forward_weight := float(tuning.get("pass_forward_weight", 0.1))
+	var space_weight := float(tuning.get("pass_space_weight", 0.05))
+	var distance_penalty := float(tuning.get("pass_distance_penalty_per_m", 0.15))
+	var pressure_penalty := float(tuning.get("pass_pressure_penalty", 4.0))
+	var pressure_radius := float(tuning.get("pressure_radius_m", 3.0))
+	var min_distance := float(tuning.get("pass_min_distance_m", 5.0))
+	var too_close_penalty := float(tuning.get("pass_too_close_penalty", 8.0))
+	var backward_penalty := float(tuning.get("pass_backward_penalty_per_m", 0.25))
+	var lane_radius := float(tuning.get("pass_lane_radius_m", 2.0))
+	var lane_penalty := float(tuning.get("pass_lane_penalty", 4.0))
+
 	for mate in teammates_of(view):
 		if _is_keeper(mate):
 			continue
 		var forward := (mate.global_position.x - view.global_position.x) * sign
+		var distance := flat_distance(view.global_position, mate.global_position)
+		if distance < min_distance:
+			continue
 		var space := 20.0
 		var marker := nearest_opponent(mate, 100.0)
 		if marker != null:
 			space = flat_distance(mate.global_position, marker.global_position)
 		var score := forward * forward_weight + minf(space, 20.0) * space_weight
+		score -= distance * distance_penalty
+		if forward < 0.0:
+			score += forward * backward_penalty
+		if nearest_opponent(mate, pressure_radius) != null:
+			score -= pressure_penalty
+		if _pass_lane_blocked(view, mate, lane_radius):
+			score -= lane_penalty
 		if score > best_score:
 			best_score = score
 			best = mate
 	return best
+
+
+## Is an opponent standing in the passing lane? Sampling the segment is enough
+## for this prototype and avoids passes straight through the nearest marker.
+func _pass_lane_blocked(view: RigidBody3D, mate: RigidBody3D, lane_radius: float) -> bool:
+	var start := view.global_position
+	start.y = 0.0
+	var end := mate.global_position
+	end.y = 0.0
+	for step in range(1, 5):
+		var point := start.lerp(end, float(step) / 5.0)
+		for other in views:
+			if other == view or other == mate or other.side == view.side:
+				continue
+			if flat_distance(other.global_position, point) < lane_radius:
+				return true
+	return false
 
 
 static func flat_distance(a: Vector3, b: Vector3) -> float:

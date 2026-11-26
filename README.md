@@ -48,6 +48,15 @@ six-yard-box lines at their real far edges, plus the centre spot, penalty arcs
 and corner arcs. New thresholds are in `data/stat_effects.json`, `data/rules.json`
 and `MatchConfig`.
 
+Play-rate fix: a pass or shot now fires at most once every
+`kick_cooldown_seconds` instead of every physics frame, and passes are aimed at
+an open forward team-mate with a strike speed scaled to the distance. A defender
+within `tackle_radius_m` can actually win the ball from the carrier, and
+`KeeperRule` parries shots heading into the goal; saves are counted in the
+playtest log. `FoulRule` rolls once per challenge rather than every frame, so
+tackles no longer produce a free kick every few seconds. All new thresholds are
+in `data/stat_effects.json`, `data/rules.json` and `MatchConfig`.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

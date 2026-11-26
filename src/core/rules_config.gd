@@ -5,10 +5,11 @@ extends RefCounted
 ## substitutions and added time.
 
 const FILE := "res://data/rules.json"
-const SECTIONS := ["foul", "offside", "restart", "substitution", "clock"]
+const SECTIONS := ["foul", "offside", "keeper", "restart", "substitution", "clock"]
 
 var foul: Dictionary = {}
 var offside: Dictionary = {}
+var keeper: Dictionary = {}
 var restart: Dictionary = {}
 var substitution: Dictionary = {}
 var clock: Dictionary = {}

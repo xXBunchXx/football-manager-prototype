@@ -58,6 +58,18 @@ func apply_header(direction: Vector3, speed_mps: float, loft_degrees: float, sca
 	apply_kick(direction, speed_mps, loft_degrees, scatter_degrees, spin_rad_per_sec)
 
 
+## Goalkeeper punch/parry. This is a direct velocity change rather than a kick
+## impulse, so a 20 m/s shot does not need a 40 m/s impulse to be repelled.
+func deflect(direction: Vector3, speed_mps: float) -> void:
+	var dir := direction
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = Vector3.FORWARD
+	release_control()
+	linear_velocity = dir.normalized() * speed_mps
+	spin = Vector3.ZERO
+
+
 ## Player-initiated kick: records who played the ball so the rules engine can
 ## judge offside, throw-ins and goal kicks.
 func apply_player_kick(kicker: RigidBody3D, is_pass: bool, direction: Vector3, speed_mps: float, loft_degrees: float, scatter_degrees: float, spin_rad_per_sec: float) -> void:

@@ -40,6 +40,9 @@ func record_event(event: RuleEvent) -> void:
 		RuleEvent.Type.GOAL:
 			var side: Dictionary = data[side_key(event.side)]
 			side["goals"] = int(side["goals"]) + 1
+		RuleEvent.Type.SAVE:
+			var side: Dictionary = data[side_key(event.side)]
+			side["saves"] = int(side["saves"]) + 1
 		RuleEvent.Type.FOUL:
 			var offender := 1 - event.side if event.side >= 0 else -1
 			if offender < 0:
@@ -71,6 +74,7 @@ static func _blank_side() -> Dictionary:
 	return {
 		"shots": 0,
 		"passes": 0,
+		"saves": 0,
 		"fouls": 0,
 		"yellow_cards": 0,
 		"red_cards": 0,

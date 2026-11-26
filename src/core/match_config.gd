@@ -45,8 +45,12 @@ extends Resource
 @export var player_separation_radius_m: float = 2.5
 @export var player_separation_acceleration: float = 55.0
 @export var player_separation_team_scale: float = 0.5
-@export var shot_speed_mps: float = 24.0
+@export var shot_speed_mps: float = 20.0
+## pass_speed_mps is the ceiling for a long ball; short passes are scaled by
+## distance so they arrive at a team-mate instead of skimming past him.
 @export var pass_speed_mps: float = 16.0
+@export var pass_min_speed_mps: float = 8.0
+@export var pass_travel_seconds: float = 0.9
 @export var shot_loft_degrees: float = 10.0
 @export var pass_loft_degrees: float = 4.0
 @export var control_offset_m: float = 0.9

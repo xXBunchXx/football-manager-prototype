@@ -32,10 +32,12 @@ func tick(delta: float, ctx: MatchContext) -> RuleEvent:
 		var closing := (Vector3(view.linear_velocity.x, 0.0, view.linear_velocity.z) - Vector3(carrier.linear_velocity.x, 0.0, carrier.linear_velocity.z)).length()
 		if closing < config.value("foul", "closing_speed_threshold_mps"):
 			continue
+		# One challenge, one roll. Rolling every physics frame made even a
+		# low base chance a near-certain foul while the decision persisted.
+		cooldowns[view.player_id] = config.value("foul", "tackle_cooldown_seconds")
 		if RngService.randf() >= _foul_chance(view, closing):
 			continue
 
-		cooldowns[view.player_id] = config.value("foul", "tackle_cooldown_seconds")
 		var severity := _roll_severity()
 		var state: PlayerState = view.match_state
 		if severity == FMEnums.FoulSeverity.YELLOW:

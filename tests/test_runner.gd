@@ -241,10 +241,20 @@ func _test_decisions() -> void:
 
 	var strong_club: ClubData = GameData.clubs[1]
 	var weak_club: ClubData = GameData.clubs[4]
-	var striker := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(38, 1, 0), ctx)
-	ball.reset_to(Vector3(striker.global_position.x - 1.0, cfg.ball_radius_m, 0.0))
+	var striker := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(42, 1, 0), ctx)
+	var striker_spot := Vector3(striker.global_position.x - 1.0, cfg.ball_radius_m, 0.0)
+	ball.reset_to(striker_spot)
+	ball.set_control(striker, striker_spot)
 	var striker_decision := brain.decide(striker, ctx)
-	_check(striker_decision.action == FMEnums.Action.SHOOT, "striker with the ball in range chooses shoot")
+	_check(striker_decision.action == FMEnums.Action.SHOOT, "carrier striker in range chooses shoot")
+	ball.release_control()
+	var pressure_marker := _make_view(weak_club.get_starters()[2], weak_club, false, Vector3(41, 1, 1), ctx)
+	ball.set_control(striker, striker_spot)
+	var pressured_decision := brain.decide(striker, ctx)
+	_check(pressured_decision.action != FMEnums.Action.SHOOT, "pressured striker looks for a pass instead of forcing a shot")
+	ball.release_control()
+	ctx.views.erase(pressure_marker)
+	pressure_marker.free()
 	var near_dribble_target: Vector3 = brain.call("_target_for", "dribble", striker, ctx, striker.instructions)
 	_check(near_dribble_target.x > striker.global_position.x, "dribble with the ball advances toward goal")
 	ball.reset_to(Vector3(30.0, 1.0, 0.0))
@@ -371,6 +381,46 @@ func _test_decisions() -> void:
 	agent.physics_tick(1.0 / 60.0)
 	await get_tree().physics_frame
 	_check(ball.linear_velocity.length() > 5.0, "agent shoots when the ball is in control range")
+
+	# Passes scale to the receiver's distance instead of launching every ball
+	# at the same speed.
+	var pass_agent := PlayerAgent.new(striker, brain, ctx, effects)
+	pass_agent.decision_timer = 10.0
+	var pass_target := Vector3(striker.global_position.x + 12.0, 0.0, striker.global_position.z)
+	striker.last_decision = DecisionResult.create(FMEnums.Action.PASS, pass_target, {}, "")
+	ball.reset_to(Vector3(striker.global_position.x + 0.8, cfg.ball_radius_m, striker.global_position.z))
+	ball.set_control(striker, ball.global_position)
+	pass_agent.physics_tick(1.0 / 60.0)
+	await get_tree().physics_frame
+	var pass_speed := ball.linear_velocity.length()
+	_check(ball.last_kick_was_pass, "agent records the strike as a pass")
+	_check(pass_speed >= cfg.pass_min_speed_mps - 0.1 and pass_speed <= cfg.pass_speed_mps + 0.1, "pass speed is scaled within the tuned bounds (%.1f m/s)" % pass_speed)
+
+	# A defender who closes onto the carrier can actually win the tackle.
+	var tackler := _make_view(weak_club.get_starters()[6], weak_club, false, chaser.global_position + Vector3(0.0, 0.0, 0.6), ctx)
+	ball.reset_to(chaser.global_position + Vector3(0.2, 0.0, 0.0))
+	ball.set_control(chaser, ball.global_position)
+	var tackle_agent := PlayerAgent.new(tackler, brain, ctx, effects)
+	tackle_agent.decision_timer = 10.0
+	tackler.last_decision = DecisionResult.create(FMEnums.Action.TACKLE, chaser.global_position, {}, "")
+	tackle_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == tackler, "nearby defender wins the ball with a tackle")
+	ball.release_control()
+	ctx.views.erase(tackler)
+	tackler.free()
+
+	# Pass selection favours an open forward team-mate over a crowded or
+	# overlapping one.
+	var pass_ctx := MatchContext.new()
+	var passer := _make_view(starters[6], strong_club, true, Vector3(0, 1, 0), pass_ctx, 6)
+	var open_mate := _make_view(starters[9], strong_club, true, Vector3(14, 1, 4), pass_ctx, 9)
+	_make_view(starters[8], strong_club, true, Vector3(1.5, 1, 0), pass_ctx, 8)
+	var covered_mate := _make_view(starters[7], strong_club, true, Vector3(24, 1, -6), pass_ctx, 7)
+	_make_view(weak_club.get_starters()[7], weak_club, false, Vector3(24, 1, -4), pass_ctx, 7)
+	var chosen_pass := pass_ctx.best_pass_target(passer, effects.context)
+	_check(chosen_pass == open_mate and chosen_pass != covered_mate, "pass target is the open forward option, not the covered or overlapping one")
+	for view in pass_ctx.views:
+		view.free()
 
 	for view in ctx.views:
 		view.free()
@@ -551,6 +601,18 @@ func _test_rules() -> void:
 	engine.tick(1.0 / 60.0)
 	var goal_kick_event: RuleEvent = rule_events[rule_events.size() - 1]
 	_check(goal_kick_event.restart_type == FMEnums.RestartType.GOAL_KICK, "attacker's goal-line exit awards a goal kick")
+
+	# A shot heading into the goal is parried by a keeper in reach.
+	engine.state = FMEnums.MatchState.PLAYING
+	engine_ctx.match_state = FMEnums.MatchState.PLAYING
+	var keeper := _make_view(strong_club.get_starters()[0], strong_club, true, Vector3(-48, 1, 0), engine_ctx, 0)
+	engine_ball.reset_to(Vector3(-47, cfg.ball_radius_m, 0))
+	engine_ball.linear_velocity = Vector3(-15.0, 0.0, 0.0)
+	var save_event: RuleEvent = engine.keeper_rule.tick(1.0 / 60.0, engine_ctx)
+	_check(save_event != null and save_event.type == RuleEvent.Type.SAVE, "keeper in reach parries a shot")
+	_check(engine_ball.linear_velocity.x > 0.0, "parry clears the ball away from the keeper's goal")
+	engine_ctx.views.erase(keeper)
+	keeper.free()
 
 	for view in ctx.views:
 		view.free()
@@ -775,7 +837,6 @@ func _test_match_scene() -> void:
 	var scene_data: Dictionary = scene_stats.to_dict()
 	var home_data: Dictionary = scene_data["home"]
 	_check(int(home_data["shots"]) == 1, "match scene records a shot through the kick hook")
-
 	var moved := views[9] as RigidBody3D
 	moved.global_position = Vector3(-40.0, 1.0, 0.0)
 	var match_rules: RulesEngine = instance.call("get_rules_engine")

@@ -4,7 +4,7 @@ extends RefCounted
 ## One officiating decision. Emitted by the rules engine for logging, scoring
 ## and restart placement.
 
-enum Type { FOUL, OFFSIDE, GOAL, CARD, SUBSTITUTION, RESTART, HALF_TIME, FULL_TIME }
+enum Type { FOUL, OFFSIDE, GOAL, SAVE, CARD, SUBSTITUTION, RESTART, HALF_TIME, FULL_TIME }
 
 var type: int = Type.FOUL
 var description: String = ""

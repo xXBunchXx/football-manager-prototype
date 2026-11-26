@@ -48,11 +48,7 @@ func decide(view: RigidBody3D, ctx: MatchContext) -> DecisionResult:
 	var target := _target_for(best_key, view, ctx, instructions)
 	var pass_to := ""
 	if best_key == "pass":
-		var mate := ctx.best_pass_target(
-			view,
-			effects.context_value("pass_forward_weight"),
-			effects.context_value("pass_space_weight")
-		)
+		var mate := ctx.best_pass_target(view, effects.context)
 		if mate != null:
 			pass_to = mate.player_id
 			target = mate.global_position
@@ -122,6 +118,12 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 				var radius := effects.context_value("shoot_range_m")
 				if distance < radius:
 					score += effects.context_value("shoot_near_goal_bonus") * (1.0 - distance / radius)
+					# An unmarked striker in range should shoot rather than keep
+					# recycling the ball; a pressured one should still pass.
+					if ctx.is_pressured(view, effects.context_value("pressure_radius_m")):
+						score -= effects.context_value("shoot_pressure_penalty")
+					else:
+						score += effects.context_value("shoot_unpressured_bonus")
 		"dribble":
 			var reach := effects.context_value("ball_control_radius_m")
 			if MatchContext.flat_distance(view.global_position, ball_position) <= reach:
@@ -220,6 +222,19 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 					ball_position.z * effects.context_value("gk_lateral_follow_scale"),
 					-cfg.goal_width_m * 0.5, cfg.goal_width_m * 0.5
 				)
+				# Track a shot's projected crossing point instead of just the
+				# ball's current z; otherwise every shot at the corners is free.
+				if ctx.ball != null:
+					var velocity := ctx.ball.linear_velocity
+					var goal_direction := signf(own_goal.x - ball_position.x)
+					var to_goal := absf(own_goal.x - ball_position.x)
+					if to_goal < effects.context_value("gk_intercept_max_distance_m") and absf(velocity.x) > 0.1 and signf(velocity.x) == goal_direction:
+						var time_to_line := to_goal / absf(velocity.x)
+						var predicted_z := clampf(
+							ball_position.z + velocity.z * time_to_line,
+							-cfg.goal_width_m * 0.5, cfg.goal_width_m * 0.5
+						)
+						return Vector3(line_x, 0.0, predicted_z)
 				return Vector3(line_x, 0.0, lateral)
 			# Support is anchored to the player's 4-3-3 slot. The ball only
 			# shifts the whole shape a little, so the team keeps its structure

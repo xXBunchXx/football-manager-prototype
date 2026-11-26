@@ -15,6 +15,7 @@ var config: RulesConfig = null
 var effects: StatEffects = null
 var offside_rule := OffsideRule.new()
 var foul_rule := FoulRule.new()
+var keeper_rule := KeeperRule.new()
 var restart_rule := RestartRule.new()
 var substitution_rule := SubstitutionRule.new()
 var clock_rule := ClockRule.new()
@@ -30,6 +31,7 @@ func setup(match_ctx: MatchContext, stat_effects: StatEffects, rules_config: Rul
 	config = rules_config
 	offside_rule.configure(config)
 	foul_rule.configure(config, effects)
+	keeper_rule.configure(config)
 	restart_rule.configure(config)
 	substitution_rule.configure(config)
 	if ctx.ball != null:
@@ -58,6 +60,9 @@ func tick(delta: float) -> void:
 		return
 	_check_ball_bounds()
 	_check_goal_kick_released()
+	var save_event := keeper_rule.tick(delta, ctx)
+	if save_event != null:
+		_emit(save_event)
 	var foul_event := foul_rule.tick(delta, ctx)
 	if foul_event != null:
 		_emit(foul_event)

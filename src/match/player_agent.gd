@@ -10,6 +10,7 @@ var brain: DecisionBrain
 var ctx: MatchContext
 var effects: StatEffects
 var decision_timer: float = 0.0
+var kick_timer: float = 0.0
 
 
 func _init(target_view: RigidBody3D, decision_brain: DecisionBrain, match_ctx: MatchContext, stat_effects: StatEffects) -> void:
@@ -20,6 +21,7 @@ func _init(target_view: RigidBody3D, decision_brain: DecisionBrain, match_ctx: M
 
 
 func physics_tick(delta: float) -> void:
+	kick_timer = maxf(0.0, kick_timer - delta)
 	# Dead-ball phases are placed by RestartRule; agents must not run off to an
 	# old target while the restart is being taken.
 	if ctx != null and ctx.match_state != FMEnums.MatchState.PLAYING:
@@ -80,6 +82,7 @@ func _steer() -> void:
 
 
 func _execute_ball_action() -> void:
+	var cfg := GameData.config
 	var ball := ctx.ball
 	var decision: DecisionResult = view.last_decision
 	if ball == null or decision == null:
@@ -91,12 +94,26 @@ func _execute_ball_action() -> void:
 		if ball.control_owner == view:
 			ball.release_control()
 		return
+	# A defender who has closed onto the carrier may tackle even though the
+	# ball is still at the attacker's feet. Without this exception tackles were
+	# chosen by the brain but could never actually win the ball.
+	var carrier := ctx.ball_carrier()
+	var tackling_carrier: bool = decision.action == FMEnums.Action.TACKLE and carrier != null and carrier != view and carrier.side != view.side and MatchContext.flat_distance(view.global_position, carrier.global_position) <= effects.context_value("tackle_radius_m")
+
 	# Only the closest outfield player may take control. Otherwise several
 	# nearby pills fight over the ball each frame and it looks like a scrum.
-	if ball.control_owner != view:
+	if ball.control_owner != view and not tackling_carrier:
 		var nearest := ctx.nearest_to_ball()
 		if nearest != null and nearest != view:
 			return
+
+	# One decision must not fire 60 kicks a second while the ball is still in
+	# reach. A short JSON-tuned cooldown gives each pass/shot one clean strike.
+	var is_kick := decision.action == FMEnums.Action.SHOOT or decision.action == FMEnums.Action.PASS
+	if is_kick and kick_timer > 0.0:
+		return
+	if is_kick:
+		kick_timer = effects.context_value("kick_cooldown_seconds")
 
 	var forward := decision.target - view.global_position
 	forward.y = 0.0
@@ -121,9 +138,21 @@ func _execute_ball_action() -> void:
 						pass_direction = mate.global_position - view.global_position
 						pass_direction.y = 0.0
 						pass_direction = pass_direction.normalized()
-			ball.apply_player_kick(view, true, pass_direction, GameData.config.pass_speed_mps, GameData.config.pass_loft_degrees, _scatter() * 0.5, 0.0)
+			# Scale the strike to the distance so a five-metre pass is not
+			# launched at the same speed as a thirty-metre switch.
+			var pass_distance := MatchContext.flat_distance(view.global_position, decision.target)
+			var pass_speed := clampf(
+				pass_distance / cfg.pass_travel_seconds,
+				cfg.pass_min_speed_mps,
+				cfg.pass_speed_mps
+			)
+			var scatter := _scatter() * effects.context_value("pass_scatter_scale")
+			ball.apply_player_kick(view, true, pass_direction, pass_speed, cfg.pass_loft_degrees, scatter, 0.0)
 			MatchEvents.log_event("%s passes to %s" % [view.player_id, decision.pass_to_id])
-		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK, FMEnums.Action.TACKLE:
+		FMEnums.Action.TACKLE:
+			ball.set_control(view, feet)
+			MatchEvents.log_event("%s tackles" % view.player_id)
+		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK:
 			ball.set_control(view, feet)
 		_:
 			ball.set_control(view, feet)

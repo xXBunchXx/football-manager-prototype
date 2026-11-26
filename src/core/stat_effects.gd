@@ -13,6 +13,7 @@ const ACTION_KEYS := [
 const REQUIRED_CONTEXT := [
 	"attribute_neutral", "attribute_scale", "stamina_floor",
 	"stamina_penalty_per_point", "shoot_range_m", "shoot_near_goal_bonus",
+	"shoot_unpressured_bonus", "shoot_pressure_penalty",
 	"press_radius_m", "press_proximity_bonus", "tackle_radius_m",
 	"tackle_proximity_bonus", "pressure_radius_m", "pressure_pass_bonus",
 	"mark_proximity_bonus", "mark_unassigned_penalty",
@@ -27,7 +28,10 @@ const REQUIRED_CONTEXT := [
 	"skill_action_out_of_range_penalty",
 	"controlled_skill_action_bonus", "controlled_pass_bonus",
 	"controlled_other_action_penalty", "pass_forward_weight",
-	"pass_space_weight",
+	"pass_space_weight", "pass_distance_penalty_per_m", "pass_pressure_penalty",
+	"pass_min_distance_m", "pass_too_close_penalty", "pass_backward_penalty_per_m",
+	"pass_lane_radius_m", "pass_lane_penalty", "pass_scatter_scale",
+	"kick_cooldown_seconds", "gk_intercept_max_distance_m",
 	"scatter_degrees_per_missing_composure", "speed_floor_fraction",
 ]
 
