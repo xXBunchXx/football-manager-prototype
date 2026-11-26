@@ -13,8 +13,12 @@ const ACTION_TO_ENUM := {
 	"support": FMEnums.Action.SUPPORT,
 	"chase": FMEnums.Action.CHASE,
 	"mark": FMEnums.Action.MARK,
+	"cross": FMEnums.Action.CROSS,
+	"switch": FMEnums.Action.SWITCH,
+	"overlap": FMEnums.Action.OVERLAP,
 }
-const EXERTION_KEYS := ["press", "chase", "dribble", "tackle"]
+const TARGETED_ACTIONS := ["pass", "cross", "switch"]
+const EXERTION_KEYS := ["press", "chase", "dribble", "tackle", "overlap"]
 
 var effects: StatEffects
 
@@ -33,10 +37,38 @@ func decide(view: RigidBody3D, ctx: MatchContext) -> DecisionResult:
 		var score := effects.base_score(key)
 		score += effects.attribute_score(key, profile)
 		score += _instruction_score(key, instructions)
+		score += _team_instruction_score(key, view, ctx)
 		score += _stamina_score(key, state)
 		score += _context_score(key, view, ctx, instructions)
 		scores[key] = score
 
+	var best_key := _best_score_key(scores)
+	var targeted_mate: RigidBody3D = null
+
+	# A striking action with no receiver is a kick into nowhere. Reject it and
+	# fall back to the next useful action instead of launching the ball.
+	for attempt in TARGETED_ACTIONS.size():
+		if not TARGETED_ACTIONS.has(best_key):
+			break
+		var mate := _target_mate_for(best_key, view, ctx)
+		if mate != null:
+			targeted_mate = mate
+			break
+		scores[best_key] = -INF
+		best_key = _best_score_key(scores)
+
+	var target := _target_for(best_key, view, ctx, instructions)
+	var pass_to := ""
+	if targeted_mate != null and TARGETED_ACTIONS.has(best_key):
+		pass_to = targeted_mate.player_id
+		if best_key == "cross":
+			target = ctx.cross_target_point(view, targeted_mate, effects.context)
+		else:
+			target = targeted_mate.global_position
+	return DecisionResult.create(ACTION_TO_ENUM[best_key], target, scores, pass_to)
+
+
+func _best_score_key(scores: Dictionary) -> String:
 	var best_key := ""
 	var best_score := -INF
 	for key in scores:
@@ -44,28 +76,18 @@ func decide(view: RigidBody3D, ctx: MatchContext) -> DecisionResult:
 		if value > best_score:
 			best_score = value
 			best_key = String(key)
+	return best_key
 
-	# A pass with no receiver is a kick into nowhere. Reject it and fall back to
-	# the next useful action (usually a dribble) instead of launching the ball.
-	var pass_mate: RigidBody3D = null
-	if best_key == "pass":
-		pass_mate = ctx.best_pass_target(view, effects.context)
-		if pass_mate == null:
-			scores["pass"] = -INF
-			best_key = ""
-			best_score = -INF
-			for fallback_key in scores:
-				var fallback_value := float(scores[fallback_key])
-				if fallback_value > best_score:
-					best_score = fallback_value
-					best_key = String(fallback_key)
 
-	var target := _target_for(best_key, view, ctx, instructions)
-	var pass_to := ""
-	if best_key == "pass" and pass_mate != null:
-		pass_to = pass_mate.player_id
-		target = pass_mate.global_position
-	return DecisionResult.create(ACTION_TO_ENUM[best_key], target, scores, pass_to)
+func _target_mate_for(key: String, view: RigidBody3D, ctx: MatchContext) -> RigidBody3D:
+	match key:
+		"pass":
+			return ctx.best_pass_target(view, effects.context)
+		"cross":
+			return ctx.best_cross_target(view, effects.context)
+		"switch":
+			return ctx.best_switch_target(view, effects.context)
+	return null
 
 
 func _instruction_score(key: String, instructions: PlayerInstructions) -> float:
@@ -98,8 +120,43 @@ func _instruction_score(key: String, instructions: PlayerInstructions) -> float:
 				score += effects.modifier("runs_forward", key)
 			FMEnums.Runs.HOLD:
 				score += effects.modifier("runs_hold", key)
+	match instructions.width:
+		FMEnums.WidthMode.WIDE:
+			score += effects.modifier("width_wide", key)
+		FMEnums.WidthMode.NARROW:
+			score += effects.modifier("width_narrow", key)
 	if instructions.man_mark:
 		score += effects.modifier("man_mark", key)
+	return score
+
+
+## Team-wide tactics share the same modifier tables, so later tuning can bias
+## crossing, switching or tempo without adding per-branch logic here.
+func _team_instruction_score(key: String, view: RigidBody3D, ctx: MatchContext) -> float:
+	var team := ctx.team_instructions_for(view)
+	if team == null:
+		return 0.0
+	var score := 0.0
+	match team.mentality:
+		FMEnums.Mentality.ATTACKING:
+			score += effects.modifier("mentality_attacking", key)
+		FMEnums.Mentality.DEFENSIVE:
+			score += effects.modifier("mentality_defensive", key)
+	match team.tempo:
+		FMEnums.Tempo.FAST:
+			score += effects.modifier("tempo_fast", key)
+		FMEnums.Tempo.SLOW:
+			score += effects.modifier("tempo_slow", key)
+	match team.passing_style:
+		FMEnums.PassingStyle.DIRECT:
+			score += effects.modifier("passing_style_direct", key)
+		FMEnums.PassingStyle.SHORT:
+			score += effects.modifier("passing_style_short", key)
+	match team.width:
+		FMEnums.WidthMode.WIDE:
+			score += effects.modifier("team_width_wide", key)
+		FMEnums.WidthMode.NARROW:
+			score += effects.modifier("team_width_narrow", key)
 	return score
 
 
@@ -145,6 +202,49 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 						score += effects.modifier("runs_forward", "dribble")
 					FMEnums.Runs.HOLD:
 						score += effects.modifier("runs_hold", "dribble")
+				# Space is what should make a carrier drive forward: a clear lane
+				# rewards the dribble, a nearby opponent pushes him toward a pass.
+				if is_carrier:
+					var radius := maxf(effects.context_value("dribble_space_radius_m"), 0.1)
+					var space := ctx.space_ahead(view, effects.context)
+					score += effects.context_value("dribble_space_bonus") * clampf(space / radius, 0.0, 1.0)
+					if ctx.is_pressured(view, effects.context_value("pressure_radius_m")):
+						score -= effects.context_value("dribble_pressure_penalty")
+		"cross":
+			if ctx.ball_carrier() != view or not in_control_range:
+				score -= effects.context_value("skill_action_out_of_range_penalty")
+			else:
+				var cross_mate := ctx.best_cross_target(view, effects.context)
+				if cross_mate == null:
+					score -= effects.context_value("skill_action_out_of_range_penalty")
+				else:
+					score += effects.context_value("cross_wide_bonus")
+					var marker := ctx.nearest_opponent(cross_mate, 100.0)
+					if marker != null:
+						var lane_space := MatchContext.flat_distance(cross_mate.global_position, marker.global_position)
+						score += effects.context_value("cross_space_bonus") * clampf(lane_space / 20.0, 0.0, 1.0)
+					if ctx.is_pressured(view, effects.context_value("pressure_radius_m")):
+						score -= effects.context_value("cross_pressure_penalty")
+		"switch":
+			if ctx.ball_carrier() != view or not in_control_range:
+				score -= effects.context_value("skill_action_out_of_range_penalty")
+			else:
+				var switch_mate := ctx.best_switch_target(view, effects.context)
+				if switch_mate == null:
+					score -= effects.context_value("skill_action_out_of_range_penalty")
+				else:
+					score += effects.context_value("switch_bonus")
+					if absf(view.global_position.z) < effects.context_value("wing_channel_m"):
+						score += effects.context_value("switch_central_penalty")
+		"overlap":
+			if ctx.ball_carrier() == view:
+				return -INF
+			if ctx.can_overlap(view, effects.context):
+				score += effects.context_value("overlap_bonus")
+				if ctx.is_pressured(view, effects.context_value("pressure_radius_m")):
+					score -= effects.context_value("overlap_pressure_penalty")
+			else:
+				score -= effects.context_value("skill_action_out_of_range_penalty")
 		"press", "chase":
 			var distance := MatchContext.flat_distance(view.global_position, ball_position)
 			var radius := effects.context_value("press_radius_m")
@@ -190,7 +290,7 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 	if key == "mark" and not instructions.man_mark:
 		# Marking is a delegated job, not a generic fallback for every defender.
 		score -= effects.context_value("mark_unassigned_penalty")
-	if key == "pass" or key == "dribble" or key == "shoot":
+	if TARGETED_ACTIONS.has(key) or key == "dribble" or key == "shoot":
 		if not in_control_range:
 			# Without this, dribble scores highly from 30 m away and every
 			# outfielder "dribbles" toward a loose ball as one mob.
@@ -199,11 +299,11 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 		# A player who owns the ball cannot tackle himself. This was the real
 		# cause of the kick-off scrum: an aggressive carrier kept choosing
 		# TACKLE, snapped the ball to his own feet and stood still for 15s.
-		if key == "tackle":
+		if key == "tackle" or key == "overlap":
 			return -INF
 		# Once the ball is at a player's feet, reward an on-ball action instead
 		# of passive control: without this, support/chase win and play stalls.
-		if key == "pass" or key == "dribble":
+		if key == "pass" or key == "dribble" or key == "cross" or key == "switch":
 			score += effects.context_value("controlled_skill_action_bonus")
 			if key == "pass":
 				score += effects.context_value("controlled_pass_bonus")
@@ -225,6 +325,16 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 			if MatchContext.flat_distance(view.global_position, ball_position) > effects.context_value("ball_control_radius_m"):
 				return ball_position
 			return ctx.goal_for(view).lerp(view.global_position, 1.0 - effects.context_value("dribble_advance_m") / cfg.pitch_length_m)
+		"cross":
+			var cross_mate := ctx.best_cross_target(view, effects.context)
+			if cross_mate != null:
+				return ctx.cross_target_point(view, cross_mate, effects.context)
+			return ctx.goal_for(view)
+		"switch":
+			var switch_mate := ctx.best_switch_target(view, effects.context)
+			return switch_mate.global_position if switch_mate != null else ctx.goal_for(view)
+		"overlap":
+			return ctx.overlap_target(view, effects.context)
 		"mark":
 			var opponent := ctx.nearest_opponent(view, 100.0)
 			if opponent == null:

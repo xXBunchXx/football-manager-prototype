@@ -53,6 +53,12 @@ extends Resource
 @export var pass_travel_seconds: float = 0.9
 @export var shot_loft_degrees: float = 10.0
 @export var pass_loft_degrees: float = 4.0
+## Crosses and switches are distinct strike shapes so wide play does not reuse
+## the flat, short-pass trajectory.
+@export var cross_speed_mps: float = 15.0
+@export var cross_loft_degrees: float = 12.0
+@export var switch_speed_mps: float = 18.0
+@export var switch_loft_degrees: float = 7.0
 @export var control_offset_m: float = 0.9
 
 ## 45 real minutes per half: one match runs at true wall-clock speed.

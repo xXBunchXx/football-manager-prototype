@@ -14,6 +14,7 @@ func _ready() -> void:
 	_test_data()
 	_test_instructions()
 	await _test_decisions()
+	await _test_style_play()
 	await _test_rules()
 	_test_league()
 	_test_stats()
@@ -466,6 +467,126 @@ func _test_decisions() -> void:
 	for view in ctx.views:
 		view.free()
 	ball.free()
+
+
+func _test_style_play() -> void:
+	var effects := StatEffects.load()
+	_check(effects != null, "style tuning loads with the expanded action set")
+	if effects == null:
+		return
+	_check(effects.action_base.has("cross") and effects.action_base.has("switch") and effects.action_base.has("overlap"), "cross, switch and overlap have base scores")
+	var brain := DecisionBrain.new(effects)
+	var cfg := GameData.config
+	var strong_club: ClubData = GameData.clubs[1]
+	var weak_club: ClubData = GameData.clubs[4]
+	var starters: Array = strong_club.get_starters()
+
+	# An open lane should make the carrier drive at goal; a marker in that lane
+	# should push him toward a pass instead.
+	var ctx := MatchContext.new()
+	var ball := load("res://scenes/ball.tscn").instantiate() as Ball
+	add_child(ball)
+	await get_tree().physics_frame
+	ctx.ball = ball
+	var carrier := _make_view(starters[6], strong_club, true, Vector3(0, 1, 0), ctx, 6)
+	ball.reset_to(Vector3(0.8, cfg.ball_radius_m, 0.0))
+	ball.set_control(carrier, ball.global_position)
+	var open_space: float = ctx.space_ahead(carrier, effects.context)
+	_check(is_equal_approx(open_space, effects.context_value("dribble_space_radius_m")), "space ahead is measured to the tuned radius")
+	var open_dribble := float(brain.decide(carrier, ctx).scores["dribble"])
+	var marker := _make_view(weak_club.get_starters()[6], weak_club, false, Vector3(3, 1, 0), ctx, 6)
+	var tight_dribble := float(brain.decide(carrier, ctx).scores["dribble"])
+	_check(tight_dribble < open_dribble, "a crowded lane lowers dribble utility")
+
+	# A central carrier with a far-side team-mate should switch play, not hit
+	# the covered short option beside him.
+	_make_view(starters[9], strong_club, true, Vector3(12, 1, 28), ctx, 9)
+	_make_view(starters[8], strong_club, true, Vector3(10, 1, 4), ctx, 8)
+	var switch_decision := brain.decide(carrier, ctx)
+	_check(switch_decision.action == FMEnums.Action.SWITCH, "central carrier switches play to the far wing (%s)" % switch_decision.best_action_name())
+	_check(switch_decision.pass_to_id == ctx.views[2].player_id, "switch targets the far-side team-mate")
+	ball.release_control()
+	for view in ctx.views:
+		view.free()
+	ball.free()
+
+	# A wide carrier in crossing range finds a central runner and strikes a
+	# lofted cross rather than recycling possession.
+	var cross_ctx := MatchContext.new()
+	var cross_ball := load("res://scenes/ball.tscn").instantiate() as Ball
+	add_child(cross_ball)
+	await get_tree().physics_frame
+	cross_ctx.ball = cross_ball
+	var wide_carrier := _make_view(starters[10], strong_club, true, Vector3(32, 1, -22), cross_ctx, 10)
+	wide_carrier.instructions = wide_carrier.instructions.with_overrides({"width": "WIDE", "passing_risk": "SAFE"})
+	var box_runner := _make_view(starters[9], strong_club, true, Vector3(45, 1, -4), cross_ctx, 9)
+	# A defender in the dribble lane makes the cross the progressive option even
+	# though the runner himself is still free.
+	_make_view(weak_club.get_starters()[7], weak_club, false, Vector3(34, 1, -22), cross_ctx, 7)
+	cross_ctx.team_instructions[strong_club.id] = TeamInstructions.new().with_overrides({"width": "WIDE", "passing_style": "DIRECT"})
+	cross_ball.reset_to(Vector3(32.8, cfg.ball_radius_m, -22.0))
+	cross_ball.set_control(wide_carrier, cross_ball.global_position)
+	_check(cross_ctx.best_cross_target(wide_carrier, effects.context) == box_runner, "wide carrier finds a central crossing target")
+	var cross_decision := brain.decide(wide_carrier, cross_ctx)
+	_check(cross_decision.action == FMEnums.Action.CROSS, "wide carrier crosses instead of passing backwards (%s)" % cross_decision.best_action_name())
+	_check(cross_decision.pass_to_id == box_runner.player_id, "cross targets the arriving striker")
+	var cross_agent := PlayerAgent.new(wide_carrier, brain, cross_ctx, effects)
+	cross_agent.decision_timer = 10.0
+	wide_carrier.last_decision = cross_decision
+	cross_agent.physics_tick(1.0 / 60.0)
+	await get_tree().physics_frame
+	_check(cross_ball.last_kick_was_pass, "cross is logged as a passing strike")
+	_check(cross_ball.linear_velocity.length() > 8.0, "cross leaves the foot at a useful speed (%.2f m/s)" % cross_ball.linear_velocity.length())
+	cross_ball.release_control()
+	for view in cross_ctx.views:
+		view.free()
+	cross_ball.free()
+
+	# A fullback behind the carrier on the same flank makes an overlapping run
+	# without stealing the ball, and his pace actually changes his top speed.
+	var run_ctx := MatchContext.new()
+	var run_ball := load("res://scenes/ball.tscn").instantiate() as Ball
+	add_child(run_ball)
+	await get_tree().physics_frame
+	run_ctx.ball = run_ball
+	var run_carrier := _make_view(starters[6], strong_club, true, Vector3(10, 1, -20), run_ctx, 6)
+	run_ball.reset_to(Vector3(10.8, cfg.ball_radius_m, -20.0))
+	run_ball.set_control(run_carrier, run_ball.global_position)
+	var fullback := _make_view(starters[3], strong_club, true, Vector3(4, 1, -25), run_ctx, 3)
+	_check(run_ctx.can_overlap(fullback, effects.context), "wide player behind the carrier can overlap")
+	var overlap_decision := brain.decide(fullback, run_ctx)
+	_check(overlap_decision.action == FMEnums.Action.OVERLAP, "overlapping fullback chooses the run (%s)" % overlap_decision.best_action_name())
+	var overlap_target: Vector3 = run_ctx.overlap_target(fullback, effects.context)
+	_check(overlap_target.x > fullback.global_position.x and overlap_target.z < fullback.global_position.z, "overlap target advances beyond and outside the carrier")
+	var overlap_agent := PlayerAgent.new(fullback, brain, run_ctx, effects)
+	overlap_agent.decision_timer = 10.0
+	fullback.last_decision = overlap_decision
+	overlap_agent.physics_tick(1.0 / 60.0)
+	_check(run_ball.control_owner == run_carrier, "overlapping runner does not take control from the carrier")
+
+	var normal_speed := float(overlap_agent.call("_move_speed"))
+	var original_pace: int = fullback.player_data.attributes.pace
+	fullback.player_data.attributes.pace = 20
+	var quick_speed := float(overlap_agent.call("_move_speed"))
+	fullback.player_data.attributes.pace = 1
+	var slow_speed := float(overlap_agent.call("_move_speed"))
+	fullback.player_data.attributes.pace = original_pace
+	_check(quick_speed > slow_speed + 0.5, "pace attribute varies top speed (%.2f vs %.2f)" % [quick_speed, slow_speed])
+	var original_stamina: float = fullback.match_state.stamina
+	fullback.match_state.stamina = 5.0
+	var tired_speed := float(overlap_agent.call("_move_speed"))
+	fullback.match_state.stamina = original_stamina
+	_check(tired_speed < normal_speed, "low stamina slows a player further")
+
+	run_ctx.team_instructions[strong_club.id] = TeamInstructions.new().with_overrides({"tempo": "FAST"})
+	var fast_pulse := run_ctx.tempo_pulse(fullback, effects.context)
+	run_ctx.team_instructions[strong_club.id] = TeamInstructions.new().with_overrides({"tempo": "SLOW"})
+	var slow_pulse := run_ctx.tempo_pulse(fullback, effects.context)
+	_check(fast_pulse > slow_pulse + 0.5, "team tempo biases the shared match pulse")
+	run_ball.release_control()
+	for view in run_ctx.views:
+		view.free()
+	run_ball.free()
 
 
 func _test_rules() -> void:

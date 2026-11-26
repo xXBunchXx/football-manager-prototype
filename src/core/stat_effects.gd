@@ -8,6 +8,7 @@ const FILE := "res://data/stat_effects.json"
 
 const ACTION_KEYS := [
 	"shoot", "pass", "dribble", "press", "tackle", "support", "chase", "mark",
+	"cross", "switch", "overlap",
 ]
 
 const REQUIRED_CONTEXT := [
@@ -36,6 +37,22 @@ const REQUIRED_CONTEXT := [
 	"pass_lane_radius_m", "pass_lane_penalty", "pass_scatter_scale",
 	"kick_cooldown_seconds", "gk_intercept_max_distance_m",
 	"scatter_degrees_per_missing_composure", "speed_floor_fraction",
+	"wing_channel_m", "cross_min_range_m", "cross_max_range_m",
+	"cross_box_half_width_m", "cross_allow_behind_m", "cross_target_lead_m", "cross_wide_bonus",
+	"cross_space_bonus", "cross_pressure_penalty",
+	"switch_min_lateral_m", "switch_min_distance_m", "switch_max_backward_m",
+	"switch_lateral_weight", "switch_forward_weight", "switch_space_weight",
+	"switch_distance_penalty_per_m", "switch_bonus", "switch_central_penalty",
+	"overlap_slot_threshold_m", "overlap_min_behind_m", "overlap_flank_tolerance_m",
+	"overlap_advance_m", "overlap_width_m", "overlap_bonus",
+	"overlap_pressure_penalty",
+	"dribble_space_radius_m", "dribble_space_lane_half_width_m",
+	"dribble_space_bonus", "dribble_pressure_penalty", "pass_wide_weight",
+	"tempo_cycle_seconds", "tempo_bias_scale", "tempo_wave_scale",
+	"tempo_decision_scale", "tempo_kick_scale", "tempo_pass_scale",
+	"speed_tempo_scale", "speed_variation_amplitude",
+	"speed_variation_period_seconds", "speed_stamina_penalty_per_point",
+	"speed_min_fraction", "speed_max_fraction",
 ]
 
 var action_attribute_weights: Dictionary = {}

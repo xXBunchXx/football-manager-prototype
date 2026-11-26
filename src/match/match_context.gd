@@ -118,6 +118,49 @@ func is_pressured(view: RigidBody3D, radius: float) -> bool:
 	return nearest_opponent(view, radius) != null
 
 
+func team_instructions_for(view: RigidBody3D) -> TeamInstructions:
+	return team_instructions.get(view.club_id) as TeamInstructions
+
+
+## A slow oscillation between -1 and 1, biased by the team's tempo instruction.
+## Both movement speed and strike pace read this, so matches breathe without
+## changing the real-time match clock.
+func tempo_pulse(view: RigidBody3D, tuning: Dictionary) -> float:
+	var team := team_instructions_for(view)
+	var bias := 0.0
+	if team != null:
+		match team.tempo:
+			FMEnums.Tempo.SLOW:
+				bias = -1.0
+			FMEnums.Tempo.FAST:
+				bias = 1.0
+	var elapsed := ball.match_time if ball != null else 0.0
+	var cycle := maxf(float(tuning.get("tempo_cycle_seconds", 24.0)), 0.1)
+	var phase := float(absf(view.club_id.hash() % 1000)) / 1000.0 * TAU
+	var wave := sin(elapsed * TAU / cycle + phase)
+	return clampf(
+		bias * float(tuning.get("tempo_bias_scale", 0.6)) + wave * float(tuning.get("tempo_wave_scale", 0.45)),
+		-1.0, 1.0
+	)
+
+
+## Distance to the nearest opponent in the forward lane. Used to reward a
+## carrier who has genuine space to dribble into instead of always passing.
+func space_ahead(view: RigidBody3D, tuning: Dictionary) -> float:
+	var radius := float(tuning.get("dribble_space_radius_m", 14.0))
+	var half_width := float(tuning.get("dribble_space_lane_half_width_m", 4.0))
+	var sign := attack_sign(view)
+	var nearest := radius
+	for other in opponents_of(view):
+		var forward := (other.global_position.x - view.global_position.x) * sign
+		if forward < 0.0 or forward >= radius:
+			continue
+		if absf(other.global_position.z - view.global_position.z) > half_width:
+			continue
+		nearest = minf(nearest, forward)
+	return nearest
+
+
 ## Pick a team-mate for a pass. The tuning dictionary is StatEffects.context so
 ## all weights stay in data/stat_effects.json. Short sideways passes to a
 ## overlapping foot are rejected; the ball should go forward into space.
@@ -135,6 +178,8 @@ func best_pass_target(view: RigidBody3D, tuning: Dictionary) -> RigidBody3D:
 	var backward_penalty := float(tuning.get("pass_backward_penalty_per_m", 0.25))
 	var lane_radius := float(tuning.get("pass_lane_radius_m", 2.0))
 	var lane_penalty := float(tuning.get("pass_lane_penalty", 4.0))
+	var wide_weight := float(tuning.get("pass_wide_weight", 0.12))
+	var wing_channel := float(tuning.get("wing_channel_m", 18.0))
 
 	for mate in teammates_of(view):
 		if _is_keeper(mate):
@@ -149,6 +194,8 @@ func best_pass_target(view: RigidBody3D, tuning: Dictionary) -> RigidBody3D:
 			space = flat_distance(mate.global_position, marker.global_position)
 		var score := forward * forward_weight + minf(space, 20.0) * space_weight
 		score -= distance * distance_penalty
+		if absf(mate.global_position.z) >= wing_channel:
+			score += wide_weight * minf(absf(mate.global_position.z), 30.0)
 		if forward < 0.0:
 			score += forward * backward_penalty
 		if nearest_opponent(mate, pressure_radius) != null:
@@ -176,6 +223,131 @@ func _pass_lane_blocked(view: RigidBody3D, mate: RigidBody3D, lane_radius: float
 			if flat_distance(other.global_position, point) < lane_radius:
 				return true
 	return false
+
+
+## A diagonal ball to the far flank. Only genuine lateral switches qualify, so
+## the carrier cannot farm SWITCH by hitting the nearest team-mate.
+func best_switch_target(view: RigidBody3D, tuning: Dictionary) -> RigidBody3D:
+	var best: RigidBody3D = null
+	var best_score := -INF
+	var sign := attack_sign(view)
+	var min_lateral := float(tuning.get("switch_min_lateral_m", 22.0))
+	var min_distance := float(tuning.get("switch_min_distance_m", 18.0))
+	var max_backward := float(tuning.get("switch_max_backward_m", 8.0))
+	var lane_radius := float(tuning.get("pass_lane_radius_m", 2.0))
+	for mate in teammates_of(view):
+		if _is_keeper(mate):
+			continue
+		var lateral := mate.global_position.z - view.global_position.z
+		if absf(lateral) < min_lateral:
+			continue
+		var forward := (mate.global_position.x - view.global_position.x) * sign
+		if forward < -max_backward:
+			continue
+		var distance := flat_distance(view.global_position, mate.global_position)
+		if distance < min_distance:
+			continue
+		var space := 20.0
+		var marker := nearest_opponent(mate, 100.0)
+		if marker != null:
+			space = flat_distance(mate.global_position, marker.global_position)
+		var score := absf(lateral) * float(tuning.get("switch_lateral_weight", 0.25))
+		score += forward * float(tuning.get("switch_forward_weight", 0.1))
+		score += minf(space, 20.0) * float(tuning.get("switch_space_weight", 0.08))
+		score -= distance * float(tuning.get("switch_distance_penalty_per_m", 0.08))
+		if _pass_lane_blocked(view, mate, lane_radius):
+			score -= float(tuning.get("pass_lane_penalty", 4.0))
+		if score > best_score:
+			best_score = score
+			best = mate
+	return best
+
+
+## A cross needs a wide carrier in range and a team-mate arriving centrally.
+func best_cross_target(view: RigidBody3D, tuning: Dictionary) -> RigidBody3D:
+	if absf(view.global_position.z) < float(tuning.get("wing_channel_m", 18.0)):
+		return null
+	var goal_distance := flat_distance(view.global_position, goal_for(view))
+	if goal_distance < float(tuning.get("cross_min_range_m", 8.0)):
+		return null
+	if goal_distance > float(tuning.get("cross_max_range_m", 32.0)):
+		return null
+	var best: RigidBody3D = null
+	var best_score := -INF
+	var sign := attack_sign(view)
+	var box_half_width := float(tuning.get("cross_box_half_width_m", 20.0))
+	var lane_radius := float(tuning.get("pass_lane_radius_m", 2.0))
+	for mate in teammates_of(view):
+		if _is_keeper(mate):
+			continue
+		var forward := (mate.global_position.x - view.global_position.x) * sign
+		if forward < -float(tuning.get("cross_allow_behind_m", 6.0)):
+			continue
+		if absf(mate.global_position.z) > box_half_width:
+			continue
+		var distance := flat_distance(view.global_position, mate.global_position)
+		var space := 20.0
+		var marker := nearest_opponent(mate, 100.0)
+		if marker != null:
+			space = flat_distance(mate.global_position, marker.global_position)
+		var score := minf(space, 20.0) * float(tuning.get("pass_space_weight", 0.05))
+		score += forward * float(tuning.get("pass_forward_weight", 0.1))
+		score -= distance * float(tuning.get("pass_distance_penalty_per_m", 0.15))
+		if _pass_lane_blocked(view, mate, lane_radius):
+			score -= float(tuning.get("pass_lane_penalty", 4.0))
+		if score > best_score:
+			best_score = score
+			best = mate
+	return best
+
+
+func cross_target_point(view: RigidBody3D, mate: RigidBody3D, tuning: Dictionary) -> Vector3:
+	var sign := attack_sign(view)
+	var point := mate.global_position + Vector3(sign * float(tuning.get("cross_target_lead_m", 3.0)), 0.0, 0.0)
+	point.y = 0.0
+	return _clamp_to_pitch(point)
+
+
+## A wide player behind the carrier on the same flank can burst beyond him.
+func can_overlap(view: RigidBody3D, tuning: Dictionary) -> bool:
+	if _is_keeper(view) or absf(view.formation_slot.y) < float(tuning.get("overlap_slot_threshold_m", 20.0)):
+		return false
+	var carrier := ball_carrier()
+	if carrier == null or carrier == view or carrier.side != view.side:
+		return false
+	var sign := attack_sign(view)
+	if (carrier.global_position.x - view.global_position.x) * sign < float(tuning.get("overlap_min_behind_m", 2.0)):
+		return false
+	var flank := signf(view.formation_slot.y)
+	if absf(carrier.global_position.z) > float(tuning.get("overlap_flank_tolerance_m", 6.0)):
+		if signf(carrier.global_position.z) != flank:
+			return false
+	return true
+
+
+func overlap_target(view: RigidBody3D, tuning: Dictionary) -> Vector3:
+	var carrier := ball_carrier()
+	if carrier == null:
+		return view.global_position
+	var sign := attack_sign(view)
+	var flank := signf(view.formation_slot.y)
+	if flank == 0.0:
+		flank = signf(view.global_position.z)
+	if flank == 0.0:
+		flank = 1.0
+	var point := carrier.global_position + Vector3(
+		sign * float(tuning.get("overlap_advance_m", 14.0)), 0.0,
+		flank * float(tuning.get("overlap_width_m", 6.0))
+	)
+	point.y = 0.0
+	return _clamp_to_pitch(point)
+
+
+func _clamp_to_pitch(point: Vector3) -> Vector3:
+	var cfg := GameData.config
+	point.x = clampf(point.x, -cfg.pitch_length_m * 0.5, cfg.pitch_length_m * 0.5)
+	point.z = clampf(point.z, -cfg.pitch_width_m * 0.5, cfg.pitch_width_m * 0.5)
+	return point
 
 
 static func flat_distance(a: Vector3, b: Vector3) -> float:

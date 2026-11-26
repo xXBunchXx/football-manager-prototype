@@ -31,4 +31,7 @@ func best_action_name() -> String:
 		FMEnums.Action.TACKLE: return "tackle"
 		FMEnums.Action.MARK: return "mark"
 		FMEnums.Action.CLEAR: return "clear"
+		FMEnums.Action.CROSS: return "cross"
+		FMEnums.Action.SWITCH: return "switch"
+		FMEnums.Action.OVERLAP: return "overlap"
 		_: return "none"

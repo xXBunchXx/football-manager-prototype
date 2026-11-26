@@ -32,7 +32,10 @@ func physics_tick(delta: float) -> void:
 		return
 	decision_timer -= delta
 	if decision_timer <= 0.0:
-		decision_timer = GameData.config.get_decision_interval()
+		var tempo := ctx.tempo_pulse(view, effects.context)
+		var interval := GameData.config.get_decision_interval()
+		interval *= 1.0 - tempo * effects.context_value("tempo_decision_scale")
+		decision_timer = maxf(interval, delta)
 		view.last_decision = brain.decide(view, ctx)
 	# A beaten tackler must step off for a moment. Otherwise he keeps choosing
 	# TACKLE every decision and instantly steals the ball back, pinning the
@@ -65,7 +68,7 @@ func _steer() -> void:
 	to_target.y = 0.0
 	var desired := Vector3.ZERO
 	if to_target.length() > 0.5:
-		desired = to_target.normalized() * cfg.player_max_speed_mps
+		desired = to_target.normalized() * _move_speed()
 	var current := Vector3(view.linear_velocity.x, 0.0, view.linear_velocity.z)
 	var steer := (desired - current) * cfg.player_acceleration * view.mass
 
@@ -94,6 +97,27 @@ func _steer() -> void:
 	view.apply_central_force(steer)
 
 
+## Pace actually matters now, and a shared tempo pulse makes the match breathe
+## between patient spells and quicker transitions without touching the clock.
+func _move_speed() -> float:
+	var cfg := GameData.config
+	var profile: StatProfile = view.player_data.attributes
+	var floor_fraction := effects.context_value("speed_floor_fraction")
+	var pace_fraction := clampf(float(profile.pace) / 20.0, 0.0, 1.0)
+	var factor := floor_fraction + (1.0 - floor_fraction) * pace_fraction
+	if ctx != null:
+		factor += ctx.tempo_pulse(view, effects.context) * effects.context_value("speed_tempo_scale")
+		var elapsed := ctx.ball.match_time if ctx.ball != null else 0.0
+		var period := maxf(effects.context_value("speed_variation_period_seconds"), 0.1)
+		var phase := float(absf(view.player_id.hash() % 1000)) / 1000.0 * TAU
+		factor += sin(elapsed * TAU / period + phase) * effects.context_value("speed_variation_amplitude")
+	if view.match_state != null:
+		var deficit := maxf(0.0, effects.context_value("stamina_floor") - view.match_state.stamina)
+		factor -= deficit * effects.context_value("speed_stamina_penalty_per_point")
+	factor = clampf(factor, effects.context_value("speed_min_fraction"), effects.context_value("speed_max_fraction"))
+	return cfg.player_max_speed_mps * factor
+
+
 func _execute_ball_action() -> void:
 	var cfg := GameData.config
 	var ball := ctx.ball
@@ -113,6 +137,10 @@ func _execute_ball_action() -> void:
 	# ball is still at the attacker's feet. Without this exception tackles were
 	# chosen by the brain but could never actually win the ball.
 	var carrier := ctx.ball_carrier()
+	# An overlapping run is off the ball by definition; taking control here would
+	# collapse the run back into the carrier and recreate the old scrum.
+	if decision.action == FMEnums.Action.OVERLAP and carrier != null and carrier.side == view.side:
+		return
 	var tackling_carrier: bool = decision.action == FMEnums.Action.TACKLE and carrier != null and carrier != view and carrier.side != view.side and MatchContext.flat_distance(view.global_position, carrier.global_position) <= effects.context_value("tackle_radius_m")
 
 	# Only the closest outfield player may take control. Otherwise several
@@ -124,11 +152,12 @@ func _execute_ball_action() -> void:
 
 	# One decision must not fire 60 kicks a second while the ball is still in
 	# reach. A short JSON-tuned cooldown gives each pass/shot one clean strike.
-	var is_kick := decision.action == FMEnums.Action.SHOOT or decision.action == FMEnums.Action.PASS
+	var is_kick := decision.action == FMEnums.Action.SHOOT or decision.action == FMEnums.Action.PASS or decision.action == FMEnums.Action.CROSS or decision.action == FMEnums.Action.SWITCH
 	if is_kick and kick_timer > 0.0:
 		return
 	if is_kick:
-		kick_timer = effects.context_value("kick_cooldown_seconds")
+		var tempo := ctx.tempo_pulse(view, effects.context) if ctx != null else 0.0
+		kick_timer = effects.context_value("kick_cooldown_seconds") * (1.0 - tempo * effects.context_value("tempo_kick_scale"))
 
 	var forward := decision.target - view.global_position
 	forward.y = 0.0
@@ -146,24 +175,41 @@ func _execute_ball_action() -> void:
 			MatchEvents.log_event("%s shoots" % view.player_id)
 		FMEnums.Action.PASS:
 			ball.release_control()
-			var pass_direction := forward
-			if decision.pass_to_id != "":
-				for mate in ctx.views:
-					if mate.player_id == decision.pass_to_id:
-						pass_direction = mate.global_position - view.global_position
-						pass_direction.y = 0.0
-						pass_direction = pass_direction.normalized()
+			var pass_direction := _strike_direction(decision, forward)
 			# Scale the strike to the distance so a five-metre pass is not
 			# launched at the same speed as a thirty-metre switch.
 			var pass_distance := MatchContext.flat_distance(view.global_position, decision.target)
+			var tempo := ctx.tempo_pulse(view, effects.context) if ctx != null else 0.0
 			var pass_speed := clampf(
-				pass_distance / cfg.pass_travel_seconds,
+				pass_distance / cfg.pass_travel_seconds * (1.0 + tempo * effects.context_value("tempo_pass_scale")),
 				cfg.pass_min_speed_mps,
 				cfg.pass_speed_mps
 			)
 			var scatter := _scatter() * effects.context_value("pass_scatter_scale")
 			ball.apply_player_kick(view, true, pass_direction, pass_speed, cfg.pass_loft_degrees, scatter, 0.0)
 			MatchEvents.log_event("%s passes to %s" % [view.player_id, decision.pass_to_id])
+		FMEnums.Action.CROSS, FMEnums.Action.SWITCH:
+			ball.release_control()
+			var is_cross := decision.action == FMEnums.Action.CROSS
+			var strike_speed := cfg.cross_speed_mps if is_cross else cfg.switch_speed_mps
+			var loft := cfg.cross_loft_degrees if is_cross else cfg.switch_loft_degrees
+			var tempo := ctx.tempo_pulse(view, effects.context) if ctx != null else 0.0
+			strike_speed *= 1.0 + tempo * effects.context_value("tempo_pass_scale")
+			# A cross leads the runner, so aim at the decision target rather
+			# than snapping back to his current position.
+			var cross_direction := decision.target - view.global_position
+			cross_direction.y = 0.0
+			if cross_direction.length_squared() > 0.001:
+				cross_direction = cross_direction.normalized()
+			else:
+				cross_direction = forward
+			ball.apply_player_kick(
+				view, true, cross_direction, strike_speed, loft,
+				_scatter() * effects.context_value("pass_scatter_scale"), 0.0
+			)
+			MatchEvents.log_event("%s %s to %s" % [
+				view.player_id, "crosses" if is_cross else "switches play", decision.pass_to_id,
+			])
 		FMEnums.Action.TACKLE:
 			# One challenge, one roll. A lost challenge has a recovery period,
 			# so two defenders cannot take turns snapping the ball to their own
@@ -180,8 +226,23 @@ func _execute_ball_action() -> void:
 			MatchEvents.log_event("%s tackles" % view.player_id)
 		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK:
 			ball.set_control(view, feet)
+		FMEnums.Action.OVERLAP:
+			return
 		_:
 			ball.set_control(view, feet)
+
+
+func _strike_direction(decision: DecisionResult, fallback: Vector3) -> Vector3:
+	if ctx == null or decision.pass_to_id.is_empty():
+		return fallback
+	for mate in ctx.views:
+		if mate.player_id == decision.pass_to_id:
+			var direction := mate.global_position - view.global_position
+			direction.y = 0.0
+			if direction.length_squared() > 0.001:
+				return direction.normalized()
+			break
+	return fallback
 
 
 func _scaled_speed(base_speed: float) -> float:

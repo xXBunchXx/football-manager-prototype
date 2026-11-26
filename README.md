@@ -60,6 +60,17 @@ into the goal; saves are counted in the playtest log. `FoulRule` rolls once per
 challenge rather than every frame. All new thresholds are in
 `data/stat_effects.json`, `data/rules.json` and `MatchConfig`.
 
+Generic match style: carriers now use the wings, switch play to the far side,
+cross from wide areas and drive forward when they have space. Wide players
+behind the carrier make overlapping runs instead of standing in shape, and a
+pass with no forward receiver falls back to the next useful action. Players
+move at speeds derived from `pace` and stamina, with a shared tempo pulse that
+gently slows and quickens decision-making, strike pace and movement without
+touching the real-time match clock. Team mentality, tempo, width and passing
+style feed the same modifier tables, so later tactic work can bias crosses,
+switches or overlaps from `data/stat_effects.json`. Cross and switch strike
+shapes are tuned in `MatchConfig`.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

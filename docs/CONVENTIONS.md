@@ -110,6 +110,15 @@ project. Update this document in the same change if a convention changes.
   (`foul.tackle_cooldown_seconds`) and `KeeperRule` must emit a
   `RuleEvent.Type.SAVE` via `Ball.deflect()`; keep keeper radii and speeds in
   `rules.json` and saves in `MatchStats`.
+- On-ball variety belongs in the same scoring pipeline as passing. CROSS, SWITCH
+  and OVERLAP are first-class `FMEnums.Action` values with entries in
+  `StatEffects.ACTION_KEYS`, `action_base` and `action_attribute_weights`. Target
+  selection lives in `MatchContext` (`best_cross_target`, `best_switch_target`,
+  `overlap_target`, `space_ahead`) and must reject actions with no receiver.
+  `PlayerAgent` never lets an overlapping runner take control from the carrier.
+  Movement speed comes from `pace`, stamina and `MatchContext.tempo_pulse()`; the
+  tempo pulse also scales decision cadence and strike pace, never the 90-minute
+  clock. Cross and switch trajectories are exported on `MatchConfig`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the
