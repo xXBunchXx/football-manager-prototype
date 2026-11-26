@@ -155,7 +155,16 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 				score += effects.context_value("pressure_pass_bonus")
 		"mark":
 			if instructions.man_mark:
-				score += effects.context_value("mark_proximity_bonus")
+				# A delegated marker only follows an opponent inside his own
+				# defensive zone. Chasing one all over the pitch produced the
+				# tight, constant pairing the whole back line got pulled into.
+				var opponent := ctx.nearest_opponent(view, 100.0)
+				var sign := ctx.attack_sign(view)
+				var anchor := Vector3(sign * view.formation_slot.x, 0.0, view.formation_slot.y)
+				if opponent == null or MatchContext.flat_distance(opponent.global_position, anchor) > effects.context_value("mark_zone_radius_m"):
+					score -= effects.context_value("mark_out_of_zone_penalty")
+				else:
+					score += effects.context_value("mark_proximity_bonus")
 	if key == "mark" and not instructions.man_mark:
 		# Marking is a delegated job, not a generic fallback for every defender.
 		score -= effects.context_value("mark_unassigned_penalty")
@@ -190,8 +199,18 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 				return ball_position
 			return ctx.goal_for(view).lerp(view.global_position, 1.0 - effects.context_value("dribble_advance_m") / cfg.pitch_length_m)
 		"mark":
-			var marker := ctx.nearest_opponent(view, 100.0)
-			return marker.global_position if marker != null else ball_position
+			var opponent := ctx.nearest_opponent(view, 100.0)
+			if opponent == null:
+				return ball_position
+			# Stand goal-side rather than on top of the opponent, so a marker
+			# stays between the ball and his goal instead of glued to a pill.
+			var to_own_goal := ctx.own_goal_for(view) - opponent.global_position
+			to_own_goal.y = 0.0
+			if to_own_goal.length_squared() < 0.001:
+				to_own_goal = Vector3(-ctx.attack_sign(view), 0.0, 0.0)
+			var target := opponent.global_position + to_own_goal.normalized() * effects.context_value("mark_stand_off_m")
+			target.y = 0.0
+			return target
 		"support":
 			var sign := ctx.attack_sign(view)
 			if view.player_data != null and view.player_data.role_id == "gk":

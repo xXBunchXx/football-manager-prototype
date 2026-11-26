@@ -16,6 +16,7 @@ const REQUIRED_CONTEXT := [
 	"press_radius_m", "press_proximity_bonus", "tackle_radius_m",
 	"tackle_proximity_bonus", "pressure_radius_m", "pressure_pass_bonus",
 	"mark_proximity_bonus", "mark_unassigned_penalty",
+	"mark_stand_off_m", "mark_zone_radius_m", "mark_out_of_zone_penalty",
 	"ball_control_radius_m", "support_spacing_m",
 	"stamina_penalty_active_scale", "stamina_penalty_passive_scale",
 	"support_deep_m", "support_advanced_m", "support_narrow_m",

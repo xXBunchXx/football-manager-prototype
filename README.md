@@ -37,6 +37,17 @@ and pass/dribble/shoot are penalised when the ball is out of reach. Once a playe
 owns the ball, pass/dribble win over passive support; marking is only for players
 with `man_mark`. These thresholds are all in `data/stat_effects.json`.
 
+Pacing, restarts and markings: one match now runs at true 90-minute wall-clock
+speed (45 real minutes per half). Every restart places both sides legally —
+kick-offs in their own halves, goal kicks from the six-yard box with everyone
+else outside the penalty area, and opponents outside the 9.15 m exclusion circle
+for free kicks, corners and throw-ins. A goal kick stays restricted until the
+ball clears the box. Assigned markers stand 3 m goal-side and only follow
+opponents inside their own zone. The pitch now draws the penalty-area and
+six-yard-box lines at their real far edges, plus the centre spot, penalty arcs
+and corner arcs. New thresholds are in `data/stat_effects.json`, `data/rules.json`
+and `MatchConfig`.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

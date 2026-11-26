@@ -8,6 +8,15 @@ extends Resource
 @export var pitch_width_m: float = 68.0
 @export var goal_width_m: float = 7.32
 @export var goal_height_m: float = 2.44
+@export var penalty_area_depth_m: float = 16.5
+@export var penalty_area_width_m: float = 40.32
+@export var goal_area_depth_m: float = 5.5
+@export var goal_area_width_m: float = 18.32
+@export var penalty_spot_distance_m: float = 11.0
+@export var centre_circle_radius_m: float = 9.15
+@export var penalty_arc_radius_m: float = 9.15
+@export var corner_arc_radius_m: float = 1.0
+@export var spot_radius_m: float = 0.2
 @export var ground_thickness_m: float = 0.1
 @export var ground_margin_m: float = 5.0
 @export var support_edge_inset_m: float = 3.0
@@ -42,7 +51,8 @@ extends Resource
 @export var pass_loft_degrees: float = 4.0
 @export var control_offset_m: float = 0.9
 
-@export var half_length_seconds: float = 120.0
+## 45 real minutes per half: one match runs at true wall-clock speed.
+@export var half_length_seconds: float = 2700.0
 @export var halves: int = 2
 @export var added_time_seconds: float = 0.0
 

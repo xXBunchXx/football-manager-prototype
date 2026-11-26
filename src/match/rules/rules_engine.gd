@@ -36,6 +36,7 @@ func setup(match_ctx: MatchContext, stat_effects: StatEffects, rules_config: Rul
 		ctx.ball.kick_performed.connect(_on_ball_kicked)
 		ctx.ball.control_changed.connect(_on_control_changed)
 	state = FMEnums.MatchState.PLAYING
+	ctx.match_state = state
 
 
 func tick(delta: float) -> void:
@@ -47,14 +48,23 @@ func tick(delta: float) -> void:
 		resume_timer -= delta
 		if resume_timer <= 0.0:
 			state = FMEnums.MatchState.PLAYING
+			ctx.match_state = state
+			# A goal kick stays live-restricted until the ball leaves the box.
+			if ctx.restart_type != FMEnums.RestartType.GOAL_KICK:
+				_clear_restart_restriction()
 		return
 	clock_rule.tick(delta, state == FMEnums.MatchState.PLAYING)
 	if state != FMEnums.MatchState.PLAYING:
 		return
 	_check_ball_bounds()
+	_check_goal_kick_released()
 	var foul_event := foul_rule.tick(delta, ctx)
 	if foul_event != null:
 		_emit(foul_event)
+		if foul_event.restart_type >= 0:
+			_bank("stoppage_per_foul_seconds")
+			ctx.ball.release_control()
+			_begin_restart(foul_event.restart_type, foul_event.position, foul_event.side)
 	_check_periods()
 
 
@@ -103,6 +113,14 @@ func _on_control_changed(player: RigidBody3D) -> void:
 
 func _begin_restart(restart_type: int, position: Vector3, advantage_side: int = -1) -> void:
 	var spot := restart_rule.apply(ctx.ball, restart_type, position, GameData.config)
+	if advantage_side < 0:
+		advantage_side = _default_restart_side(restart_type, position)
+	restart_rule.position_players(ctx, restart_type, spot, advantage_side, GameData.config)
+	ctx.match_state = FMEnums.MatchState.RESTART
+	ctx.restart_type = restart_type
+	ctx.restart_side = advantage_side
+	ctx.restart_spot = spot
+	ctx.restart_exclusion_radius_m = config.value("restart", "restart_exclusion_radius_m")
 	state = FMEnums.MatchState.RESTART
 	resume_timer = config.value("clock", "restart_delay_seconds")
 	restart_count += 1
@@ -123,6 +141,8 @@ func request_substitution(club_id: String, outgoing_id: String, incoming_id: Str
 			break
 	_bank("stoppage_per_substitution_seconds")
 	_emit(RuleEvent.create(RuleEvent.Type.SUBSTITUTION, "%s replaces %s" % [incoming_id, outgoing_id], outgoing_id))
+	ctx.match_state = FMEnums.MatchState.RESTART
+	_clear_restart_restriction()
 	state = FMEnums.MatchState.RESTART
 	resume_timer = config.value("clock", "restart_delay_seconds")
 	return true
@@ -134,11 +154,46 @@ func _check_periods() -> void:
 		period_events["half"] = true
 		var added := clock_rule.finalize_period()
 		state = FMEnums.MatchState.HALF_TIME
+		ctx.match_state = state
+		_clear_restart_restriction()
 		_emit(RuleEvent.create(RuleEvent.Type.HALF_TIME, "half time (+%ds)" % int(added)))
 	if not period_events.has("full") and clock_rule.full_time_reached(cfg):
 		period_events["full"] = true
 		state = FMEnums.MatchState.FULL_TIME
+		ctx.match_state = state
+		_clear_restart_restriction()
 		_emit(RuleEvent.create(RuleEvent.Type.FULL_TIME, "full time"))
+
+
+func _default_restart_side(restart_type: int, position: Vector3) -> int:
+	match restart_type:
+		FMEnums.RestartType.GOAL_KICK:
+			# The team whose own goal stands at this end restarts.
+			return FMEnums.Side.AWAY if position.x >= 0.0 else FMEnums.Side.HOME
+		FMEnums.RestartType.CORNER:
+			return FMEnums.Side.HOME if position.x >= 0.0 else FMEnums.Side.AWAY
+		FMEnums.RestartType.THROW_IN, FMEnums.RestartType.FREE_KICK:
+			return _last_side()
+		_:
+			return FMEnums.Side.HOME
+
+
+## The opposition may not enter the goal-kick restriction until the ball has
+## been played out of the penalty area. This is independent of the short
+## dead-ball delay so a goal kick cannot be turned into an instant shot.
+func _check_goal_kick_released() -> void:
+	if ctx.restart_type != FMEnums.RestartType.GOAL_KICK:
+		return
+	var cfg := GameData.config
+	var goal_sign := 1.0 if ctx.restart_spot.x >= 0.0 else -1.0
+	var boundary := goal_sign * (cfg.pitch_length_m * 0.5 - cfg.penalty_area_depth_m)
+	if goal_sign * ctx.ball.global_position.x <= goal_sign * boundary:
+		_clear_restart_restriction()
+
+
+func _clear_restart_restriction() -> void:
+	ctx.restart_type = -1
+	ctx.restart_side = -1
 
 
 func _last_side() -> int:

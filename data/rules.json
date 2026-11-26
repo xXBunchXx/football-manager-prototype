@@ -18,7 +18,9 @@
     "throw_in_offset_m": 1.0,
     "penalty_spot_m": 11.0,
     "goal_kick_depth_m": 5.0,
-    "boundary_inset_m": 1.0
+    "boundary_inset_m": 1.0,
+    "restart_exclusion_radius_m": 9.15,
+    "taker_offset_m": 1.0
   },
   "substitution": {
     "max_per_club": 5

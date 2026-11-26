@@ -46,6 +46,12 @@ func _test_config() -> void:
 	_check(cfg.pitch_length_m == 105.0 and cfg.pitch_width_m == 68.0, "MatchConfig pitch dimensions")
 	_check(absf(cfg.get_decision_interval() - (1.0 / 6.0)) < 0.0001, "MatchConfig decision interval")
 	_check(cfg.speed_steps.size() == 4, "MatchConfig speed steps")
+	_check(is_equal_approx(cfg.get_match_duration_seconds(), 5400.0), "match clock runs 90 real minutes")
+	var pitch_script: Script = load("res://src/match/pitch.gd")
+	_check(is_equal_approx(pitch_script.penalty_area_boundary_x(-1.0, cfg), -36.0), "penalty-area line sits at the box's far edge")
+	_check(is_equal_approx(pitch_script.goal_area_boundary_x(1.0, cfg), 47.0), "six-yard line sits at the box's far edge")
+	_check(pitch_script.penalty_arc_span(-1.0, cfg).y > 0.0, "penalty arc faces midfield")
+	_check(pitch_script.corner_arc_span(-1.0, 1.0).x < 0.0, "corner arc bends inside the touchline")
 
 
 func _test_rng() -> void:
@@ -325,11 +331,19 @@ func _test_decisions() -> void:
 	_check(float(carrier_scores["support"]) < float(free_scores["support"]), "carrier stops holding a support shape")
 
 	var marker := _make_view(starters[2], strong_club, true, Vector3(-35, 1, 10), ctx, 2)
+	var marked_opponent := _make_view(weak_club.get_starters()[2], weak_club, false, Vector3(-34, 1, 12), ctx, 2)
 	_check(not marker.instructions.man_mark, "default centre-back is not assigned a mark")
 	var unassigned_mark := float(brain.decide(marker, ctx).scores["mark"])
 	marker.instructions = marker.instructions.with_overrides({"man_mark": true})
 	var assigned_mark := float(brain.decide(marker, ctx).scores["mark"])
 	_check(assigned_mark > unassigned_mark + 9.0, "only assigned markers get the mark bonus")
+	var mark_target: Vector3 = brain.call("_target_for", "mark", marker, ctx, marker.instructions)
+	_check(MatchContext.flat_distance(mark_target, marked_opponent.global_position) >= effects.context_value("mark_stand_off_m") - 0.01, "assigned marking keeps a stand-off distance")
+	_check(mark_target.x < marked_opponent.global_position.x, "marker stays goal-side of the opponent")
+	marked_opponent.global_position = Vector3(40, 1, 25)
+	var distant_mark := float(brain.decide(marker, ctx).scores["mark"])
+	_check(distant_mark < assigned_mark, "assigned marker stops following an opponent out of his zone")
+	marked_opponent.global_position = Vector3(-34, 1, 12)
 
 	# A nearby but farther player cannot steal control from the true owner.
 	var rival := _make_view(starters[9], strong_club, true, Vector3(31.0, 1, 0), ctx, 9)
@@ -436,13 +450,41 @@ func _test_rules() -> void:
 	var throw_in := restart.apply(ball, FMEnums.RestartType.THROW_IN, Vector3(20, 1, 30), cfg)
 	_check(absf(throw_in.z - (cfg.pitch_width_m * 0.5 - 1.0)) < 0.01, "throw-in is placed on the touchline")
 	var goal_kick := restart.apply(ball, FMEnums.RestartType.GOAL_KICK, Vector3(52, 1, 10), cfg)
-	_check(goal_kick.x > 40.0 and absf(goal_kick.z) <= cfg.goal_width_m * 0.5 + 0.01, "goal kick stays in the six-yard box lane")
+	_check(goal_kick.x > 40.0 and absf(goal_kick.z) <= cfg.goal_area_width_m * 0.5 + 0.01, "goal kick stays inside the six-yard box")
+	_check(absf(goal_kick.z) > cfg.goal_width_m * 0.5, "goal kick may be wider than the goal")
 	var corner := restart.apply(ball, FMEnums.RestartType.CORNER, Vector3(52, 1, 30), cfg)
 	_check(corner.x > 45.0 and absf(corner.z) > 30.0, "corner is placed in the corner arc")
 	var penalty := restart.apply(ball, FMEnums.RestartType.PENALTY, Vector3(52, 1, 0), cfg)
 	_check(absf(penalty.x - (cfg.pitch_length_m * 0.5 - 11.0)) < 0.01, "penalty is placed on the spot")
 	var free_kick := restart.apply(ball, FMEnums.RestartType.FREE_KICK, Vector3(60, 1, 50), cfg)
 	_check(absf(free_kick.x) <= cfg.pitch_length_m * 0.5 and absf(free_kick.z) <= cfg.pitch_width_m * 0.5, "free kick is brought back in play")
+
+	# Restart bodies are placed legally, and the opposition cannot play a goal
+	# kick before the ball has left the penalty area.
+	var restart_gk := _make_view(weak_club.get_starters()[0], weak_club, false, Vector3(48, 1, 0), ctx, 0)
+	var restart_attacker := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(40, 1, 0), ctx, 9)
+	var gk_spot := restart.apply(ball, FMEnums.RestartType.GOAL_KICK, Vector3(52, 1, 8), cfg)
+	restart.position_players(ctx, FMEnums.RestartType.GOAL_KICK, gk_spot, FMEnums.Side.AWAY, cfg)
+	_check(MatchContext.flat_distance(restart_gk.global_position, gk_spot) < 2.5, "goal-kick taker stands behind the ball")
+	_check(restart_attacker.global_position.x <= cfg.pitch_length_m * 0.5 - cfg.penalty_area_depth_m + 0.01, "opponents clear the penalty area at goal kicks")
+	var restart_brain := DecisionBrain.new(effects)
+	var restart_agent := PlayerAgent.new(restart_attacker, restart_brain, ctx, effects)
+	restart_agent.decision_timer = 10.0
+	restart_attacker.last_decision = DecisionResult.create(FMEnums.Action.SUPPORT, gk_spot, {}, "")
+	restart_attacker.global_position = gk_spot + Vector3(-0.5, 1.0, 0.0)
+	ctx.match_state = FMEnums.MatchState.PLAYING
+	ctx.restart_type = FMEnums.RestartType.GOAL_KICK
+	ctx.restart_side = FMEnums.Side.AWAY
+	ctx.restart_spot = gk_spot
+	restart_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == null, "opposition cannot take the goal kick early")
+	ctx.restart_type = -1
+	ctx.restart_side = -1
+	restart_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == restart_attacker, "opposition can play once the goal kick is released")
+	ball.release_control()
+	restart_attacker.global_position = Vector3(40, 1, 0)
+	ctx.match_state = FMEnums.MatchState.PLAYING
 
 	# Substitutions are capped per club and refuse duplicate ids.
 	var substitution := SubstitutionRule.new()
@@ -738,7 +780,7 @@ func _test_match_scene() -> void:
 	moved.global_position = Vector3(-40.0, 1.0, 0.0)
 	var match_rules: RulesEngine = instance.call("get_rules_engine")
 	match_rules.call("_begin_restart", FMEnums.RestartType.KICKOFF, Vector3.ZERO, -1)
-	_check(moved.global_position.x > 15.0, "kickoff returns players to their formation")
+	_check(moved.global_position.x < 0.0 and moved.global_position.x > -30.0, "kickoff puts players back in their own half")
 	_check(absf(scene_ball.global_position.x) < 0.01 and absf(scene_ball.global_position.z) < 0.01, "kickoff resets the ball to centre")
 	instance.free()
 

@@ -81,6 +81,17 @@ project. Update this document in the same change if a convention changes.
   and `PlayerAgent` only lets the nearest outfielder take control. On-ball actions
   get their bonus only when the ball is in reach; keep the out-of-range penalties
   and `mark_unassigned_penalty` in `stat_effects.json` when retuning behaviour.
+- A match is 45 real minutes per half (`MatchConfig.half_length_seconds`), so the
+  scoreboard clock advances one match second per real second. Restart geometry
+  (`restart_exclusion_radius_m`, `taker_offset_m`) belongs in `rules.json`;
+  `RestartRule` places the bodies, and `PlayerAgent` freezes during
+  `MatchState.RESTART` and honours the goal-kick restriction through
+  `MatchContext.can_play_ball()`.
+- Assigned markers stand `mark_stand_off_m` goal-side of their opponent and only
+  follow targets inside `mark_zone_radius_m`; keep both in `stat_effects.json`.
+  Pitch dimensions and arc radii are exported on `MatchConfig`; `Pitch` must draw
+  the penalty-area and six-yard lines at their far edges, and keep the centre
+  spot, penalty arcs and corner arcs.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

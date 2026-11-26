@@ -8,6 +8,14 @@ var ball: Ball = null
 var views: Array[RigidBody3D] = []
 var team_instructions: Dictionary = {}
 
+## Mirrors RulesEngine.state so agents know when play is dead. Starts in play
+## so headless agent tests keep steering without an explicit setup call.
+var match_state: int = FMEnums.MatchState.PLAYING
+var restart_type: int = -1
+var restart_side: int = -1
+var restart_spot: Vector3 = Vector3.ZERO
+var restart_exclusion_radius_m: float = 9.15
+
 
 func add_view(view: RigidBody3D) -> void:
 	views.append(view)
@@ -41,6 +49,17 @@ func goal_for(view: RigidBody3D) -> Vector3:
 func own_goal_for(view: RigidBody3D) -> Vector3:
 	var cfg := GameData.config
 	return Vector3(-attack_sign(view) * cfg.pitch_length_m * 0.5, cfg.goal_height_m * 0.5, 0.0)
+
+
+## A player may not touch the ball during a dead-ball restart. A goal kick stays
+## restricted for the opposition until the ball clears the penalty area, which
+## stops the old "run straight at the spot and shoot" behaviour.
+func can_play_ball(view: RigidBody3D) -> bool:
+	if match_state == FMEnums.MatchState.RESTART:
+		return false
+	if restart_type == FMEnums.RestartType.GOAL_KICK and restart_side >= 0 and view.side != restart_side:
+		return false
+	return true
 
 
 func ball_carrier() -> RigidBody3D:

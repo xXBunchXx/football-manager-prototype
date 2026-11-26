@@ -20,6 +20,10 @@ func _init(target_view: RigidBody3D, decision_brain: DecisionBrain, match_ctx: M
 
 
 func physics_tick(delta: float) -> void:
+	# Dead-ball phases are placed by RestartRule; agents must not run off to an
+	# old target while the restart is being taken.
+	if ctx != null and ctx.match_state != FMEnums.MatchState.PLAYING:
+		return
 	decision_timer -= delta
 	if decision_timer <= 0.0:
 		decision_timer = GameData.config.get_decision_interval()
@@ -33,7 +37,16 @@ func _steer() -> void:
 	if decision == null:
 		return
 	var cfg := GameData.config
-	var to_target := decision.target - view.global_position
+	var target := decision.target
+	if ctx != null and not ctx.can_play_ball(view):
+		var radius := ctx.restart_exclusion_radius_m
+		var away := target - ctx.restart_spot
+		away.y = 0.0
+		if away.length() < radius:
+			if away.length_squared() < 0.001:
+				away = Vector3(ctx.attack_sign(view), 0.0, 0.0)
+			target = ctx.restart_spot + away.normalized() * radius
+	var to_target := target - view.global_position
 	to_target.y = 0.0
 	var desired := Vector3.ZERO
 	if to_target.length() > 0.5:
@@ -70,6 +83,8 @@ func _execute_ball_action() -> void:
 	var ball := ctx.ball
 	var decision: DecisionResult = view.last_decision
 	if ball == null or decision == null:
+		return
+	if ctx != null and not ctx.can_play_ball(view):
 		return
 	var distance := MatchContext.flat_distance(view.global_position, ball.global_position)
 	if distance > effects.context_value("ball_control_radius_m"):
