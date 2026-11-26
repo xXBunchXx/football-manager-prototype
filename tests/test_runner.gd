@@ -17,7 +17,8 @@ func _ready() -> void:
 	await _test_rules()
 	_test_league()
 	_test_stats()
-	_test_match_scene()
+	await _test_physics()
+	await _test_match_scene()
 	await _test_ball()
 	_test_rng()
 	_test_events()
@@ -256,6 +257,17 @@ func _test_decisions() -> void:
 	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "ADVANCED"})
 	var high_target: Vector3 = brain.decide(deep_cb, ctx).target
 	_check(deep_target.x < high_target.x, "support depth shifts the target up or down pitch")
+
+	var wide_lanes: Array[float] = []
+	for starter in strong_club.get_starters():
+		var wide_view := _make_view(starter, strong_club, true, Vector3(-8, 1, 0), ctx)
+		wide_view.instructions = wide_view.instructions.with_overrides({"width": "WIDE"})
+		var lane_target: Vector3 = brain.call("_target_for", "support", wide_view, ctx, wide_view.instructions)
+		wide_lanes.append(lane_target.z)
+	var unique_lanes: Dictionary = {}
+	for z in wide_lanes:
+		unique_lanes[snappedf(z, 0.01)] = true
+	_check(unique_lanes.size() >= 3, "wide support spreads team-mates into distinct lanes (%d lanes)" % unique_lanes.size())
 
 	var agent := PlayerAgent.new(striker, brain, ctx, effects)
 	agent.decision_timer = 10.0
@@ -551,6 +563,62 @@ func _test_stats() -> void:
 	_check(parsed is Dictionary, "stats summary is valid JSON")
 
 
+func _test_physics() -> void:
+	var pitch_scene: PackedScene = load("res://scenes/pitch.tscn")
+	var pitch: Node = pitch_scene.instantiate()
+	add_child(pitch)
+	var ground: StaticBody3D = pitch.find_child("GroundCollider", true, false) as StaticBody3D
+	_check(ground != null, "pitch creates a static ground collider")
+	if ground != null:
+		var collision: CollisionShape3D = ground.find_child("GroundShape", true, false) as CollisionShape3D
+		var box: BoxShape3D = null
+		if collision != null:
+			box = collision.shape as BoxShape3D
+		_check(box != null and box.size.x >= GameData.config.pitch_length_m, "ground collider spans the pitch (size %s)" % [box.size if box != null else Vector3.ZERO])
+
+	var ctx := MatchContext.new()
+	var club: ClubData = GameData.clubs[0]
+	var falling := _make_view(club.get_starters()[9], club, true, Vector3(0, 3.0, 0), ctx)
+	for i in 120:
+		await get_tree().physics_frame
+	_check(falling.global_position.y > 0.5, "players settle on the pitch instead of falling through it")
+	_check(absf(falling.linear_velocity.y) < 0.5, "ground contact stops vertical acceleration (vy %.2f, y %.2f)" % [falling.linear_velocity.y, falling.global_position.y])
+	falling.free()
+
+	var effects := StatEffects.load()
+	if effects == null:
+		pitch.free()
+		return
+	var brain := DecisionBrain.new(effects)
+	var same_delta: float = await _separation_distance(false, club, effects, brain)
+	var opponent_delta: float = await _separation_distance(true, club, effects, brain)
+	_check(same_delta > 0.05, "nearby players push apart instead of clumping")
+	_check(opponent_delta > same_delta, "opponents push apart harder than team-mates (%.6f vs %.6f)" % [opponent_delta, same_delta])
+	pitch.free()
+
+
+func _separation_distance(opponents: bool, club: ClubData, effects: StatEffects, brain: DecisionBrain) -> float:
+	var ctx := MatchContext.new()
+	var left := _make_view(club.get_starters()[5], club, true, Vector3(0, 0.9, 0), ctx)
+	var right := _make_view(club.get_starters()[6], club, not opponents, Vector3(1.0, 0.9, 0), ctx)
+	for view in [left, right]:
+		view.collision_layer = 0
+		view.collision_mask = 0
+		view.last_decision = DecisionResult.create(FMEnums.Action.SUPPORT, view.global_position, {}, "")
+	var left_agent := PlayerAgent.new(left, brain, ctx, effects)
+	var right_agent := PlayerAgent.new(right, brain, ctx, effects)
+	left_agent.decision_timer = 10.0
+	right_agent.decision_timer = 10.0
+	for i in 12:
+		left_agent.physics_tick(1.0 / 60.0)
+		right_agent.physics_tick(1.0 / 60.0)
+		await get_tree().physics_frame
+	var delta := absf(left.global_position.x - right.global_position.x) - 1.0
+	left.free()
+	right.free()
+	return delta
+
+
 func _test_match_scene() -> void:
 	var packed: PackedScene = load("res://scenes/match_scene.tscn")
 	_check(packed != null, "match scene resource loads")
@@ -569,6 +637,8 @@ func _test_match_scene() -> void:
 	_check(agents.size() == 22, "match scene builds 22 decision agents")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
+	var match_ground := instance.find_child("GroundCollider", true, false)
+	_check(match_ground != null, "match scene pitch has a ground collider")
 	var score_label: Label = instance.find_child("ScoreLabel", true, false)
 	var clock_label: Label = instance.find_child("ClockLabel", true, false)
 	var event_label: Label = instance.find_child("EventLabel", true, false)

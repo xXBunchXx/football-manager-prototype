@@ -154,7 +154,9 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 					width = effects.context_value("support_narrow_m")
 				FMEnums.WidthMode.WIDE:
 					width = effects.context_value("support_wide_m")
-			var lane := 1.0 if view.global_position.z >= 0.0 else -1.0
+			# Stable per-player lane so team-mates do not all aim at the same
+			# support spot. Width instruction scales how wide the lanes spread.
+			var lane := float(absi(view.player_id.hash()) % 1000) / 999.0 * 2.0 - 1.0
 			var z := clampf(ball_position.z + lane * width, -cfg.pitch_width_m * 0.5 + 2.0, cfg.pitch_width_m * 0.5 - 2.0)
 			return Vector3(ball_position.x + ctx.attack_sign(view) * depth, 0.0, z)
 		_:

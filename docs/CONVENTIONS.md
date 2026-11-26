@@ -63,6 +63,10 @@ project. Update this document in the same change if a convention changes.
 - Balance changes are JSON-only: tune `stat_effects.json` or `rules.json`, not
   GDScript weights. `MatchStats` records playtest measurements; the calibration
   tool only reports them.
+- The grass mesh is visual only; `Pitch` must create the `GroundCollider` from
+  `MatchConfig` so the ball and pills cannot fall through the world. Player
+  separation belongs in `PlayerAgent` and support lanes in `DecisionBrain`; keep
+  both when retuning steering so bodies do not clump.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

@@ -14,6 +14,11 @@ record to `user://fm_playtest_log.jsonl`; **P** prints the current summary to th
 event log. `tools/calibrate_playtest.py` aggregates those records. Balance changes
 remain JSON-only. Actual weight tuning is pending your playtest.
 
+Playtest fix: the pitch now creates a real static `GroundCollider`, pills use a
+frictionless physics material, `PlayerAgent` adds proximity separation (opponents
+push harder than team-mates), and support targets use stable per-player lanes so
+team-mates spread out instead of stacking on one spot.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`
@@ -63,8 +68,9 @@ fixture. In a match: **K** = debug kick, **S** = substitution, **P** = print
 stats, **L** = league screen. `scenes/match_scene.tscn` still opens directly for
 engine work.
 
-Next: apply the calibration findings from your playtest, changing only
-`data/stat_effects.json` and `data/rules.json`.
+Next: visually confirm the physics fix on the live pitch, then apply the
+calibration findings from your playtest, changing only `data/stat_effects.json`
+and `data/rules.json`.
 
 Aggregate a playtest log with:
 

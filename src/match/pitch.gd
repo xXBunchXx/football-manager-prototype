@@ -6,14 +6,42 @@ extends Node3D
 const LINE_Y := 0.015
 const LINE_WIDTH := 0.12
 const CIRCLE_SEGMENTS := 32
+const GROUND_NODE_NAME := "GroundCollider"
 
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 
 
 func _ready() -> void:
 	_setup_environment()
+	_build_ground_collision()
 	_build_markings()
 	_build_goals()
+
+
+## The grass mesh is visual only. This collider is what actually holds the
+## pills and the ball on the pitch; it extends past the markings so running out
+## of play does not drop a body through the world.
+func _build_ground_collision() -> void:
+	if has_node(GROUND_NODE_NAME):
+		return
+	var cfg := GameData.config
+	var body := StaticBody3D.new()
+	body.name = GROUND_NODE_NAME
+	body.collision_layer = FMEnums.LAYER_WORLD
+	body.collision_mask = 0
+
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(
+		cfg.pitch_length_m + cfg.ground_margin_m * 2.0,
+		cfg.ground_thickness_m,
+		cfg.pitch_width_m + cfg.ground_margin_m * 2.0
+	)
+	var collision := CollisionShape3D.new()
+	collision.name = "GroundShape"
+	collision.shape = shape
+	collision.position.y = -cfg.ground_thickness_m * 0.5
+	body.add_child(collision)
+	add_child(body)
 
 
 func _setup_environment() -> void:

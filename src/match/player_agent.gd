@@ -40,6 +40,29 @@ func _steer() -> void:
 		desired = to_target.normalized() * cfg.player_max_speed_mps
 	var current := Vector3(view.linear_velocity.x, 0.0, view.linear_velocity.z)
 	var steer := (desired - current) * cfg.player_acceleration * view.mass
+
+	# Without separation every player steers to the same ball/support point and
+	# the capsules pile into one another. Push away from nearby bodies; push
+	# harder off opponents than teammates so marking still works.
+	var separation := Vector3.ZERO
+	for other in ctx.views:
+		if other == view:
+			continue
+		var away := view.global_position - other.global_position
+		away.y = 0.0
+		var distance := away.length()
+		if distance <= 0.001 or distance >= cfg.player_separation_radius_m:
+			continue
+		var strength := 1.0 - distance / cfg.player_separation_radius_m
+		if other.side == view.side:
+			strength *= cfg.player_separation_team_scale
+		separation += away / distance * strength
+	var strength_magnitude := separation.length()
+	if strength_magnitude > 0.0:
+		# Keep the accumulated strength (team-mates push half as hard) but cap
+		# the total when several nearby bodies all contribute.
+		steer += separation / maxf(strength_magnitude, 1.0) * cfg.player_separation_acceleration * view.mass
+
 	view.apply_central_force(steer)
 
 

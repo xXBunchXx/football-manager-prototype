@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://src/match/player_view.gd" id="1_view"]
 
@@ -10,6 +10,10 @@ height = 1.8
 radius = 0.35
 height = 1.8
 
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_body"]
+friction = 0.0
+bounce = 0.0
+
 [node name="PlayerView" type="RigidBody3D"]
 collision_layer = 2
 collision_mask = 7
@@ -19,6 +23,7 @@ angular_damp = 8.0
 axis_lock_angular_x = true
 axis_lock_angular_y = true
 axis_lock_angular_z = true
+physics_material_override = SubResource("PhysicsMaterial_body")
 script = ExtResource("1_view")
 
 [node name="Body" type="MeshInstance3D" parent="."]
