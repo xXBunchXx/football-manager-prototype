@@ -11,6 +11,8 @@ var ctx: MatchContext
 var effects: StatEffects
 var decision_timer: float = 0.0
 var kick_timer: float = 0.0
+var tackle_timer: float = 0.0
+var tackle_backoff_timer: float = 0.0
 
 
 func _init(target_view: RigidBody3D, decision_brain: DecisionBrain, match_ctx: MatchContext, stat_effects: StatEffects) -> void:
@@ -22,6 +24,8 @@ func _init(target_view: RigidBody3D, decision_brain: DecisionBrain, match_ctx: M
 
 func physics_tick(delta: float) -> void:
 	kick_timer = maxf(0.0, kick_timer - delta)
+	tackle_timer = maxf(0.0, tackle_timer - delta)
+	tackle_backoff_timer = maxf(0.0, tackle_backoff_timer - delta)
 	# Dead-ball phases are placed by RestartRule; agents must not run off to an
 	# old target while the restart is being taken.
 	if ctx != null and ctx.match_state != FMEnums.MatchState.PLAYING:
@@ -30,6 +34,15 @@ func physics_tick(delta: float) -> void:
 	if decision_timer <= 0.0:
 		decision_timer = GameData.config.get_decision_interval()
 		view.last_decision = brain.decide(view, ctx)
+	# A beaten tackler must step off for a moment. Otherwise he keeps choosing
+	# TACKLE every decision and instantly steals the ball back, pinning the
+	# carrier in place.
+	if tackle_backoff_timer > 0.0:
+		var carrier := ctx.ball_carrier()
+		if carrier != null and carrier != view:
+			view.last_decision = DecisionResult.create(
+				FMEnums.Action.SUPPORT, _tackle_backoff_target(carrier), view.last_decision.scores, ""
+			)
 	_steer()
 	_execute_ball_action()
 
@@ -88,6 +101,8 @@ func _execute_ball_action() -> void:
 	if ball == null or decision == null:
 		return
 	if ctx != null and not ctx.can_play_ball(view):
+		return
+	if tackle_backoff_timer > 0.0:
 		return
 	var distance := MatchContext.flat_distance(view.global_position, ball.global_position)
 	if distance > effects.context_value("ball_control_radius_m"):
@@ -150,6 +165,17 @@ func _execute_ball_action() -> void:
 			ball.apply_player_kick(view, true, pass_direction, pass_speed, cfg.pass_loft_degrees, scatter, 0.0)
 			MatchEvents.log_event("%s passes to %s" % [view.player_id, decision.pass_to_id])
 		FMEnums.Action.TACKLE:
+			# One challenge, one roll. A lost challenge has a recovery period,
+			# so two defenders cannot take turns snapping the ball to their own
+			# feet every few frames while the carrier stands still.
+			if tackle_timer > 0.0:
+				return
+			tackle_timer = effects.context_value("tackle_challenge_cooldown_seconds")
+			if tackling_carrier:
+				if not RngService.chance(effects.context_value("tackle_success_chance")):
+					tackle_backoff_timer = effects.context_value("tackle_backoff_seconds")
+					MatchEvents.log_event("%s is beaten by the carrier" % view.player_id)
+					return
 			ball.set_control(view, feet)
 			MatchEvents.log_event("%s tackles" % view.player_id)
 		FMEnums.Action.DRIBBLE, FMEnums.Action.SUPPORT, FMEnums.Action.CHASE, FMEnums.Action.PRESS, FMEnums.Action.MARK:
@@ -169,3 +195,17 @@ func _scatter() -> float:
 	var profile: StatProfile = view.player_data.attributes
 	var composure: int = profile.composure
 	return float(20 - composure) * effects.context_value("scatter_degrees_per_missing_composure")
+
+
+func _tackle_backoff_target(carrier: RigidBody3D) -> Vector3:
+	var away := view.global_position - carrier.global_position
+	away.y = 0.0
+	if away.length_squared() < 0.001:
+		away = ctx.own_goal_for(view) - carrier.global_position
+		away.y = 0.0
+	if away.length_squared() < 0.001:
+		away = Vector3(ctx.attack_sign(view), 0.0, 0.0)
+	var distance := effects.context_value("tackle_backoff_distance_m")
+	var target := carrier.global_position + away.normalized() * distance
+	target.y = 0.0
+	return target

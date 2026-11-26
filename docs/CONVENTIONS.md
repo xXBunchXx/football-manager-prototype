@@ -101,10 +101,15 @@ project. Update this document in the same change if a convention changes.
 - A defender within `tackle_radius_m` may take control from an opponent carrier
   even though he is not the closest player to the ball, but only the closest
   defender per side gets the tackle bonus (`ball_chaser_rank()` +
-  `tackle_rank_penalty_per_place`); otherwise the carrier gets glued into a scrum.
-  `FoulRule` must roll once per challenge (`foul.tackle_cooldown_seconds`) and
-  `KeeperRule` must emit a `RuleEvent.Type.SAVE` via `Ball.deflect()`; keep keeper
-  radii and speeds in `rules.json` and saves in `MatchStats`.
+  `tackle_rank_penalty_per_place`). A tackle is one contested roll, not a
+  per-frame control grab: keep `tackle_challenge_cooldown_seconds`,
+  `tackle_success_chance`, `tackle_backoff_seconds` and
+  `tackle_backoff_distance_m` in `stat_effects.json`, and never let a carrier
+  choose TACKLE. A PASS decision with no eligible receiver must fall back to the
+  next action. `FoulRule` must roll once per challenge
+  (`foul.tackle_cooldown_seconds`) and `KeeperRule` must emit a
+  `RuleEvent.Type.SAVE` via `Ball.deflect()`; keep keeper radii and speeds in
+  `rules.json` and saves in `MatchStats`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

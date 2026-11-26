@@ -339,6 +339,7 @@ func _test_decisions() -> void:
 	_check(float(carrier_scores["pass"]) > float(free_scores["pass"]), "carrier prefers passing")
 	_check(float(carrier_scores["dribble"]) > float(free_scores["dribble"]), "carrier prefers dribbling")
 	_check(float(carrier_scores["support"]) < float(free_scores["support"]), "carrier stops holding a support shape")
+	_check(float(carrier_scores["tackle"]) < -100.0, "carrier never tackles himself")
 
 	var marker := _make_view(starters[2], strong_club, true, Vector3(-35, 1, 10), ctx, 2)
 	var marked_opponent := _make_view(weak_club.get_starters()[2], weak_club, false, Vector3(-34, 1, 12), ctx, 2)
@@ -407,14 +408,35 @@ func _test_decisions() -> void:
 	_check(close_tackle > distant_tackle + effects.context_value("tackle_rank_penalty_per_place") * 0.5, "only the nearest defender gets the tackle bonus")
 	ctx.views.erase(shadow)
 	shadow.free()
+	var original_tackle_chance := float(effects.context["tackle_success_chance"])
+	effects.context["tackle_success_chance"] = 1.0
 	var tackle_agent := PlayerAgent.new(tackler, brain, ctx, effects)
 	tackle_agent.decision_timer = 10.0
 	tackler.last_decision = DecisionResult.create(FMEnums.Action.TACKLE, chaser.global_position, {}, "")
 	tackle_agent.physics_tick(1.0 / 60.0)
 	_check(ball.control_owner == tackler, "nearby defender wins the ball with a tackle")
 	ball.release_control()
+
+	# A lost challenge must not hand the ball straight back a frame later.
+	var challenger := _make_view(weak_club.get_starters()[8], weak_club, false, chaser.global_position + Vector3(0.0, 0.0, 0.9), ctx)
+	ball.reset_to(chaser.global_position + Vector3(0.2, 0.0, 0.0))
+	ball.set_control(chaser, ball.global_position)
+	effects.context["tackle_success_chance"] = 0.0
+	var failed_agent := PlayerAgent.new(challenger, brain, ctx, effects)
+	failed_agent.decision_timer = 10.0
+	challenger.last_decision = DecisionResult.create(FMEnums.Action.TACKLE, chaser.global_position, {}, "")
+	failed_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == chaser, "failed tackle leaves the carrier in control")
+	_check(failed_agent.tackle_backoff_timer > 0.0, "failed tackler backs off")
+	challenger.last_decision = DecisionResult.create(FMEnums.Action.TACKLE, chaser.global_position, {}, "")
+	failed_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == chaser, "failed tackler cannot instantly retry")
+	effects.context["tackle_success_chance"] = original_tackle_chance
+	ball.release_control()
 	ctx.views.erase(tackler)
+	ctx.views.erase(challenger)
 	tackler.free()
+	challenger.free()
 
 	# Pass selection favours an open forward team-mate over a crowded or
 	# overlapping one.
@@ -426,6 +448,18 @@ func _test_decisions() -> void:
 	_make_view(weak_club.get_starters()[7], weak_club, false, Vector3(24, 1, -4), pass_ctx, 7)
 	var chosen_pass := pass_ctx.best_pass_target(passer, effects.context)
 	_check(chosen_pass == open_mate and chosen_pass != covered_mate, "pass target is the open forward option, not the covered or overlapping one")
+
+	# With every team-mate too close, PASS must fall back instead of kicking
+	# the ball toward goal with no receiver.
+	open_mate.global_position = passer.global_position + Vector3(2.0, 0.0, 0.0)
+	covered_mate.global_position = passer.global_position + Vector3(3.0, 0.0, 1.0)
+	pass_ctx.ball = ball
+	ball.reset_to(passer.global_position + Vector3(0.8, 0.0, 0.0))
+	ball.set_control(passer, ball.global_position)
+	var boxed_decision := brain.decide(passer, pass_ctx)
+	_check(boxed_decision.action != FMEnums.Action.PASS, "carrier does not pass when no team-mate is eligible")
+	_check(boxed_decision.pass_to_id == "", "pass with no receiver has no target id")
+	ball.release_control()
 	for view in pass_ctx.views:
 		view.free()
 

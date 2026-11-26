@@ -45,13 +45,26 @@ func decide(view: RigidBody3D, ctx: MatchContext) -> DecisionResult:
 			best_score = value
 			best_key = String(key)
 
+	# A pass with no receiver is a kick into nowhere. Reject it and fall back to
+	# the next useful action (usually a dribble) instead of launching the ball.
+	var pass_mate: RigidBody3D = null
+	if best_key == "pass":
+		pass_mate = ctx.best_pass_target(view, effects.context)
+		if pass_mate == null:
+			scores["pass"] = -INF
+			best_key = ""
+			best_score = -INF
+			for fallback_key in scores:
+				var fallback_value := float(scores[fallback_key])
+				if fallback_value > best_score:
+					best_score = fallback_value
+					best_key = String(fallback_key)
+
 	var target := _target_for(best_key, view, ctx, instructions)
 	var pass_to := ""
-	if best_key == "pass":
-		var mate := ctx.best_pass_target(view, effects.context)
-		if mate != null:
-			pass_to = mate.player_id
-			target = mate.global_position
+	if best_key == "pass" and pass_mate != null:
+		pass_to = pass_mate.player_id
+		target = pass_mate.global_position
 	return DecisionResult.create(ACTION_TO_ENUM[best_key], target, scores, pass_to)
 
 
@@ -183,13 +196,18 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 			# outfielder "dribbles" toward a loose ball as one mob.
 			score -= effects.context_value("skill_action_out_of_range_penalty")
 	if is_carrier:
+		# A player who owns the ball cannot tackle himself. This was the real
+		# cause of the kick-off scrum: an aggressive carrier kept choosing
+		# TACKLE, snapped the ball to his own feet and stood still for 15s.
+		if key == "tackle":
+			return -INF
 		# Once the ball is at a player's feet, reward an on-ball action instead
 		# of passive control: without this, support/chase win and play stalls.
 		if key == "pass" or key == "dribble":
 			score += effects.context_value("controlled_skill_action_bonus")
 			if key == "pass":
 				score += effects.context_value("controlled_pass_bonus")
-		elif key == "support" or key == "chase" or key == "press" or key == "mark" or key == "tackle":
+		elif key == "support" or key == "chase" or key == "press" or key == "mark":
 			score += effects.context_value("controlled_other_action_penalty")
 	return score
 

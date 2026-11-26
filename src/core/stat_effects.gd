@@ -16,6 +16,8 @@ const REQUIRED_CONTEXT := [
 	"shoot_unpressured_bonus", "shoot_pressure_penalty",
 	"press_radius_m", "press_proximity_bonus", "tackle_radius_m",
 	"tackle_proximity_bonus", "tackle_rank_penalty_per_place",
+	"tackle_challenge_cooldown_seconds", "tackle_success_chance",
+	"tackle_backoff_seconds", "tackle_backoff_distance_m",
 	"pressure_radius_m", "pressure_pass_bonus",
 	"mark_proximity_bonus", "mark_unassigned_penalty",
 	"mark_stand_off_m", "mark_zone_radius_m", "mark_out_of_zone_penalty",
