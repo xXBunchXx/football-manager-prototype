@@ -27,6 +27,15 @@ extends Resource
 @export var physics_ticks_per_second: int = 60
 @export var decision_ticks_per_second: float = 6.0
 
+@export var player_max_speed_mps: float = 7.5
+@export var player_acceleration: float = 30.0
+@export var player_linear_damp: float = 4.0
+@export var shot_speed_mps: float = 24.0
+@export var pass_speed_mps: float = 16.0
+@export var shot_loft_degrees: float = 10.0
+@export var pass_loft_degrees: float = 4.0
+@export var control_offset_m: float = 0.9
+
 @export var half_length_seconds: float = 120.0
 @export var halves: int = 2
 @export var added_time_seconds: float = 0.0

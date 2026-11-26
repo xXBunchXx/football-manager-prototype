@@ -22,13 +22,33 @@ const FORMATION: Array[Vector2] = [
 @onready var ball: Ball = $Ball
 
 var player_views: Array[RigidBody3D] = []
+var agents: Array[PlayerAgent] = []
+var match_ctx: MatchContext = null
+var brain: DecisionBrain = null
+var effects: StatEffects = null
 
 
 func _ready() -> void:
+	effects = StatEffects.load()
+	if effects == null:
+		push_error("MatchScene: could not load stat effects")
+		return
+	brain = DecisionBrain.new(effects)
+	match_ctx = MatchContext.new()
+	match_ctx.ball = ball
+	match_ctx.team_instructions = GameData.team_instructions
 	_spawn_teams()
+	for view in player_views:
+		match_ctx.add_view(view)
+		agents.append(PlayerAgent.new(view, brain, match_ctx, effects))
 	var camera := find_child("MatchCamera", true, false)
 	if camera != null and camera.has_method("set_follow_target"):
 		camera.set_follow_target(ball)
+
+
+func _physics_process(delta: float) -> void:
+	for agent in agents:
+		agent.physics_tick(delta)
 
 
 func _input(event: InputEvent) -> void:
@@ -66,3 +86,11 @@ func get_player_views() -> Array[RigidBody3D]:
 
 func get_ball() -> Ball:
 	return ball
+
+
+func get_agents() -> Array[PlayerAgent]:
+	return agents
+
+
+func get_context() -> MatchContext:
+	return match_ctx

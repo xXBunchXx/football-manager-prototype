@@ -7,13 +7,18 @@ extends RigidBody3D
 
 var player_id: String = ""
 var club_id: String = ""
+var side: int = FMEnums.Side.HOME
+var player_data: PlayerData = null
 var instructions: PlayerInstructions = null
 var match_state: PlayerState = null
+var last_decision: DecisionResult = null
 
 
 func setup(player: PlayerData, club: ClubData, is_home: bool) -> void:
 	player_id = player.id
 	club_id = club.id
+	side = FMEnums.Side.HOME if is_home else FMEnums.Side.AWAY
+	player_data = player
 	instructions = GameData.player_instructions.get(player.id, InstructionDefaults.for_role(player.role_id))
 	match_state = PlayerState.for_player(player)
 	var mat := StandardMaterial3D.new()
@@ -33,3 +38,7 @@ func get_match_state() -> PlayerState:
 
 func get_instructions() -> PlayerInstructions:
 	return instructions
+
+
+func get_last_decision() -> DecisionResult:
+	return last_decision

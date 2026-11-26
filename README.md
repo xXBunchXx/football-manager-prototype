@@ -7,7 +7,15 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 5 (instructions and player state) complete: `PlayerInstructions` and
+Phase 6 (decision layer) complete: `DecisionBrain` scores eight actions from
+attribute weights, instruction modifiers and context thresholds in
+`data/stat_effects.json`; the highest score drives each player's target and
+action. `PlayerAgent` steers `RigidBody3D` players with forces toward that
+target and kicks/passes when the ball is in control range. `MatchContext` keeps
+the world snapshot testable. Stronger attributes and shoot-on-sight measurably
+raise shoot utility; low stamina lowers pressing utility.
+
+Earlier: Phase 5 (instructions and player state) — `PlayerInstructions` and
 `TeamInstructions` are typed Resources with validated UPPER_SNAKE_CASE enum names
 in `data/instructions.json`. `InstructionDefaults` supplies role baselines and
 JSON overrides only the exceptions. `PlayerState` holds mutable per-match values
@@ -20,7 +28,7 @@ Phase 4: `scenes/ball.tscn` is an always-physical
 a Magnus force curves spinning shots. Possession is steering-force control
 (toward a point at the player's feet, no reparenting). `PitchBounds.classify()`
 does code-based goal/out-of-play checks. Press **K** in the match scene for a
-debug kick. No AI or match rules yet.
+debug kick. No match rules yet.
 
 Earlier phases: `scenes/pitch.tscn` with procedural markings/goals, 22
 `RigidBody3D` capsule players in 4-3-3, camera modes on keys 1/2/3; typed
@@ -31,8 +39,8 @@ fixtures, edit `tools/generate_fixtures.py` and run
 
 To look at the match: open `scenes/match_scene.tscn` and press Play (K = kick).
 
-Next: phase 6, the decision layer that turns instructions and attributes into
-movement, passing and shooting behaviour.
+Next: phase 7, match rules — offside, fouls/cards, restarts, substitutions and
+added time.
 
 ## Run the checks
 

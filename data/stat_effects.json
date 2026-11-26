@@ -1,0 +1,62 @@
+{
+  "action_attribute_weights": {
+    "shoot": {"finishing": 1.0, "composure": 0.5, "positioning": 0.4, "technique": 0.2},
+    "pass": {"passing": 1.0, "vision": 0.8, "first_touch": 0.4, "composure": 0.3, "technique": 0.3},
+    "dribble": {"technique": 1.0, "acceleration": 0.8, "pace": 0.6, "first_touch": 0.5},
+    "press": {"work_rate": 1.0, "stamina": 0.6, "anticipation": 0.5, "tackling": 0.3},
+    "tackle": {"tackling": 1.0, "strength": 0.5, "anticipation": 0.4, "decisions": 0.3},
+    "support": {"vision": 0.8, "passing": 0.7, "positioning": 0.6},
+    "chase": {"pace": 1.0, "acceleration": 0.9, "work_rate": 0.6},
+    "mark": {"positioning": 1.0, "anticipation": 0.8, "strength": 0.4}
+  },
+  "action_base": {
+    "shoot": -2.0,
+    "pass": 1.0,
+    "dribble": 0.0,
+    "press": 0.0,
+    "tackle": -2.0,
+    "support": 1.5,
+    "chase": 0.0,
+    "mark": -1.0
+  },
+  "instruction_modifiers": {
+    "shoot_on_sight": {"shoot": 8.0},
+    "passing_risk_risky": {"pass": 2.0},
+    "passing_risk_safe": {"pass": -1.0},
+    "duty_attack": {"shoot": 3.0, "support": -2.0, "dribble": 1.0},
+    "duty_defend": {"shoot": -4.0, "support": 1.0, "press": 1.0},
+    "pressing_high": {"press": 4.0, "chase": 2.0},
+    "pressing_low": {"press": -3.0, "chase": -1.0},
+    "tackle_aggressive": {"tackle": 4.0},
+    "tackle_cautious": {"tackle": -3.0},
+    "runs_forward": {"dribble": 3.0, "support": -1.0},
+    "runs_hold": {"dribble": -3.0, "support": 2.0},
+    "man_mark": {"mark": 6.0}
+  },
+  "context": {
+    "attribute_neutral": 10.0,
+    "attribute_scale": 0.5,
+    "stamina_floor": 40.0,
+    "stamina_penalty_per_point": 0.08,
+    "shoot_range_m": 22.0,
+    "shoot_near_goal_bonus": 7.0,
+    "press_radius_m": 18.0,
+    "press_proximity_bonus": 3.0,
+    "tackle_radius_m": 2.5,
+    "tackle_proximity_bonus": 5.0,
+    "pressure_radius_m": 3.0,
+    "pressure_pass_bonus": 3.0,
+    "mark_proximity_bonus": 2.0,
+    "ball_control_radius_m": 1.6,
+    "support_spacing_m": 10.0,
+    "stamina_penalty_active_scale": 1.0,
+    "stamina_penalty_passive_scale": 0.25,
+    "support_deep_m": 8.0,
+    "support_advanced_m": 10.0,
+    "support_narrow_m": 8.0,
+    "support_wide_m": 12.0,
+    "dribble_advance_m": 12.0,
+    "scatter_degrees_per_missing_composure": 0.5,
+    "speed_floor_fraction": 0.7
+  }
+}

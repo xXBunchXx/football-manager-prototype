@@ -44,6 +44,9 @@ project. Update this document in the same change if a convention changes.
 ## Data rules
 
 - No magic numbers in logic. Tuning goes in `MatchConfig` or `data/stat_effects.json`.
+- Decisions are utility scores: `DecisionBrain` combines action base scores,
+  attribute weights and instruction modifiers from `stat_effects.json`. Never
+  add a hardcoded weight to the brain — put it in that JSON instead.
 - JSON is the source of truth for generated content; `FixtureLoader` validates it
   and constructs typed Resources. User-created content is saved as JSON in `user://`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;

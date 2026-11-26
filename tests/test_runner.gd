@@ -13,6 +13,7 @@ func _ready() -> void:
 	_test_config()
 	_test_data()
 	_test_instructions()
+	await _test_decisions()
 	_test_match_scene()
 	await _test_ball()
 	_test_rng()
@@ -198,6 +199,82 @@ func _test_instructions() -> void:
 	_check(with_duty.effective_duty(cb) == FMEnums.Duty.ATTACK, "duty override beats instruction duty")
 
 
+func _make_view(player: PlayerData, club: ClubData, is_home: bool, position: Vector3, ctx: MatchContext) -> RigidBody3D:
+	var packed: PackedScene = load("res://scenes/player_view.tscn")
+	var view := packed.instantiate() as RigidBody3D
+	add_child(view)
+	view.setup(player, club, is_home)
+	view.global_position = position
+	ctx.add_view(view)
+	return view
+
+
+func _test_decisions() -> void:
+	var effects := StatEffects.load()
+	_check(effects != null, "stat effects load and validate")
+	if effects == null:
+		return
+	_check(effects.action_attribute_weights.size() == StatEffects.ACTION_KEYS.size(), "all action weight tables present")
+	_check(effects.modifier("shoot_on_sight", "shoot") > 0.0, "shoot-on-sight modifier is positive")
+
+	var brain := DecisionBrain.new(effects)
+	var ctx := MatchContext.new()
+	var ball_scene: PackedScene = load("res://scenes/ball.tscn")
+	var ball := ball_scene.instantiate() as Ball
+	add_child(ball)
+	await get_tree().physics_frame
+	ctx.ball = ball
+	ball.reset_to(Vector3(30, 1, 0))
+
+	var strong_club: ClubData = GameData.clubs[1]
+	var weak_club: ClubData = GameData.clubs[4]
+	var striker := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(38, 1, 0), ctx)
+	var striker_decision := brain.decide(striker, ctx)
+	_check(striker_decision.action == FMEnums.Action.SHOOT, "striker inside shooting range chooses shoot")
+
+	var midfielder := _make_view(strong_club.get_starters()[6], strong_club, true, Vector3(-8, 1, 0), ctx)
+	var base_scores: Dictionary = brain.decide(midfielder, ctx).scores
+	midfielder.instructions = midfielder.instructions.with_overrides({"shoot_on_sight": true})
+	var boosted_scores: Dictionary = brain.decide(midfielder, ctx).scores
+	_check(boosted_scores["shoot"] > base_scores["shoot"], "shoot-on-sight lifts shoot utility")
+
+	var fresh := _make_view(strong_club.get_starters()[2], strong_club, true, Vector3(-30, 1, 8), ctx)
+	var tired := _make_view(strong_club.get_starters()[2], strong_club, true, Vector3(-30, 1, -8), ctx)
+	tired.match_state.stamina = 10.0
+	_check(float(brain.decide(tired, ctx).scores["press"]) < float(brain.decide(fresh, ctx).scores["press"]), "low stamina reduces pressing utility")
+
+	var strong_st := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(20, 1, 20), ctx)
+	var weak_st := _make_view(weak_club.get_starters()[9], weak_club, false, Vector3(20, 1, -20), ctx)
+	_check(float(brain.decide(strong_st, ctx).scores["shoot"]) > float(brain.decide(weak_st, ctx).scores["shoot"]), "stronger attributes raise shoot utility")
+
+	var deep_cb := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-25, 1, 15), ctx)
+	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "DEEP"})
+	var deep_target: Vector3 = brain.decide(deep_cb, ctx).target
+	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "ADVANCED"})
+	var high_target: Vector3 = brain.decide(deep_cb, ctx).target
+	_check(deep_target.x < high_target.x, "support depth shifts the target up or down pitch")
+
+	var agent := PlayerAgent.new(striker, brain, ctx, effects)
+	agent.decision_timer = 10.0
+	striker.last_decision = DecisionResult.create(FMEnums.Action.SUPPORT, Vector3(60, 0, 0), {}, "")
+	var start_velocity := Vector3(striker.linear_velocity.x, 0.0, striker.linear_velocity.z)
+	for i in 5:
+		agent.physics_tick(1.0 / 60.0)
+		await get_tree().physics_frame
+	var end_velocity := Vector3(striker.linear_velocity.x, 0.0, striker.linear_velocity.z)
+	_check(end_velocity.x > start_velocity.x, "steering accelerates the player toward its target")
+
+	ball.reset_to(Vector3(striker.global_position.x + 1.0, GameData.config.ball_radius_m, striker.global_position.z))
+	striker.last_decision = DecisionResult.create(FMEnums.Action.SHOOT, ctx.goal_for(striker), {}, "")
+	agent.physics_tick(1.0 / 60.0)
+	await get_tree().physics_frame
+	_check(ball.linear_velocity.length() > 5.0, "agent shoots when the ball is in control range")
+
+	for view in ctx.views:
+		view.free()
+	ball.free()
+
+
 func _test_match_scene() -> void:
 	var packed: PackedScene = load("res://scenes/match_scene.tscn")
 	_check(packed != null, "match scene resource loads")
@@ -212,6 +289,8 @@ func _test_match_scene() -> void:
 		if view.call("get_instructions") == null or view.call("get_match_state") == null:
 			tactical_ready = false
 	_check(tactical_ready, "all 22 starters carry instructions and match state")
+	var agents: Array = instance.call("get_agents")
+	_check(agents.size() == 22, "match scene builds 22 decision agents")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
 	instance.free()
