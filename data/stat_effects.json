@@ -182,12 +182,11 @@
     "tackle_modifier_chance_scale": 0.02,
     "tackle_win_base": 0.48,
     "tackle_win_attribute_scale": 0.014,
-    "tackle_foul_chance": 0.10,
+    "tackle_foul_chance": 0.85,
     "shot_goal_base": 0.08,
     "shot_goal_attribute_scale": 0.006,
     "shot_save_base": 0.20,
     "shot_save_keeper_scale": 0.01,
-    "shot_on_target_base": 0.58,
     "shot_wide_penalty": 0.35,
     "min_chance": 0.05,
     "max_chance": 0.95,
@@ -195,11 +194,11 @@
   },
   "analysis": {
     "min_pass_completion_rate": 0.68,
-    "max_tackles_per_match": 20.0,
+    "max_tackles_per_match": 28.0,
     "min_tackle_win_rate": 0.45,
-    "max_fouls_per_tackle": 0.18,
+    "max_fouls_per_tackle": 0.55,
     "min_shot_conversion": 0.07,
     "min_shots_per_match": 8.0,
-    "min_possession_share": 0.35
+    "min_possession_share_ratio": 0.8
   }
 }

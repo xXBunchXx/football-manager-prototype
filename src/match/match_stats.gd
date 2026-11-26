@@ -61,6 +61,21 @@ func record_control(side_value: int, delta: float, player_id: String = "") -> vo
 	player["control_seconds"] = float(player["control_seconds"]) + delta
 
 
+## Scale synthetic possession seconds so both sides together account for one
+## match. Live matches do not call this: their control is measured in real time.
+func normalize_control(total_seconds: float) -> void:
+	var current := float((data["home"] as Dictionary)["control_seconds"]) + float((data["away"] as Dictionary)["control_seconds"])
+	if current <= 0.0 or total_seconds <= 0.0:
+		return
+	var factor := total_seconds / current
+	for side_value: int in [FMEnums.Side.HOME, FMEnums.Side.AWAY]:
+		var side: Dictionary = data[side_key(side_value)]
+		side["control_seconds"] = float(side["control_seconds"]) * factor
+	for player_id in (data["players"] as Dictionary):
+		var player: Dictionary = data["players"][player_id]
+		player["control_seconds"] = float(player["control_seconds"]) * factor
+
+
 func record_touch(player_id: String, side_value: int) -> void:
 	var side: Dictionary = data[side_key(side_value)]
 	side["touches"] = int(side["touches"]) + 1
@@ -74,13 +89,14 @@ func record_pass_completion(kicker_id: String, receiver_id: String, side_value: 
 	side["passes_completed"] = int(side["passes_completed"]) + 1
 	if not intended_target_id.is_empty() and intended_target_id == receiver_id:
 		side["passes_to_target"] = int(side["passes_to_target"]) + 1
-	for player_id in [kicker_id, receiver_id]:
-		if player_id.is_empty():
-			continue
-		var player := _ensure_player(player_id, side_value)
-		player["passes_completed"] = int(player["passes_completed"]) + 1
-		if player_id == receiver_id and not intended_target_id.is_empty() and intended_target_id == receiver_id:
-			player["passes_to_target"] = int(player["passes_to_target"]) + 1
+	# A pass is completed by the kicker, not by both players: crediting the
+	# receiver as well doubled per-player completions and produced >100% rates.
+	if not kicker_id.is_empty():
+		var kicker := _ensure_player(kicker_id, side_value)
+		kicker["passes_completed"] = int(kicker["passes_completed"]) + 1
+	if not receiver_id.is_empty() and not intended_target_id.is_empty() and intended_target_id == receiver_id:
+		var receiver := _ensure_player(receiver_id, side_value)
+		receiver["passes_to_target"] = int(receiver["passes_to_target"]) + 1
 
 
 func record_tackle_attempt(player_id: String, side_value: int) -> void:

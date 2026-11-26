@@ -2,10 +2,10 @@
   "foul": {
     "tackle_cooldown_seconds": 1.0,
     "closing_speed_threshold_mps": 3.0,
-    "base_chance": 0.01,
-    "closing_speed_bonus_per_mps": 0.002,
-    "aggression_bonus": 0.01,
-    "skill_reduction_per_point": 0.001,
+    "base_chance": 0.35,
+    "closing_speed_bonus_per_mps": 0.01,
+    "aggression_bonus": 0.08,
+    "skill_reduction_per_point": 0.005,
     "yellow_chance": 0.15,
     "red_chance": 0.02
   },

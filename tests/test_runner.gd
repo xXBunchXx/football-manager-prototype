@@ -632,6 +632,13 @@ func _test_rules() -> void:
 	var onside_runner := _make_view(strong_club.get_starters()[8], strong_club, true, Vector3(-5, 1, 0), ctx)
 	_check(not offside.check_first_touch(onside_runner, ctx), "onside pass is not flagged")
 
+	var shipped_foul := FoulRule.new()
+	shipped_foul.configure(rules_config, effects)
+	var sample_tackler := _make_view(strong_club.get_starters()[6], strong_club, true, Vector3(0, 1, 0), ctx)
+	sample_tackler.linear_velocity = Vector3(5.0, 0.0, 0.0)
+	var shipped_foul_chance := shipped_foul._foul_chance(sample_tackler, 5.0)
+	_check(shipped_foul_chance > 0.25 and shipped_foul_chance < 0.60, "shipped foul config gives a credible per-tackle chance (%.2f)" % shipped_foul_chance)
+
 	# A fast, aggressive tackle on the carrier is a foul and yields a card.
 	var foul_values: Dictionary = rules_config.foul
 	foul_values["closing_speed_threshold_mps"] = 0.0
@@ -906,6 +913,17 @@ func _test_stats() -> void:
 	var away: Dictionary = data["away"]
 	_check(int(home["shots"]) == 1 and int(home["passes"]) == 1, "match stats count shots and passes by side")
 	_check(is_equal_approx(float(home["control_seconds"]), 12.5), "match stats accumulate possession time")
+	var normalized := MatchStats.new()
+	normalized.record_control(FMEnums.Side.HOME, 60.0, "n1")
+	normalized.record_control(FMEnums.Side.AWAY, 140.0, "n2")
+	normalized.normalize_control(100.0)
+	var scaled: Dictionary = normalized.to_dict()
+	var scaled_home: Dictionary = scaled["home"]
+	var scaled_away: Dictionary = scaled["away"]
+	var scaled_players: Dictionary = scaled["players"]
+	_check(is_equal_approx(float(scaled_home["control_seconds"]), 30.0)
+		and is_equal_approx(float(scaled_away["control_seconds"]), 70.0)
+		and is_equal_approx(float((scaled_players["n1"] as Dictionary)["control_seconds"]), 30.0), "normalization scales team and player possession to one match")
 	_check(int(home["goals"]) == 1, "goal events credit the scoring side")
 	_check(int(home["fouls"]) == 1 and int(home["yellow_cards"]) == 1, "foul events credit the offender, not the victim")
 	_check(int(away["fouls"]) == 0, "fouls are not charged to the fouled side")
@@ -930,6 +948,8 @@ func _test_stats_detail() -> void:
 	var tackler: Dictionary = players["p3"]
 	_check(int(side["passes_completed"]) == 1 and int(side["passes_to_target"]) == 1, "team pass completion counts the intended receiver")
 	_check(int(passer["passes_attempted"]) == 1 and int(passer["passes_completed"]) == 1, "player pass completion is recorded")
+	var receiver: Dictionary = players["p2"]
+	_check(int(receiver["passes_completed"]) == 0 and int(receiver["passes_to_target"]) == 1, "a completed pass credits the kicker, not the receiver")
 	_check(int(tackler["tackles"]) == 1 and int(tackler["tackle_wins"]) == 1, "player tackle attempts and wins are recorded")
 	_check(int(tackler["fouls"]) == 1 and int(tackler["yellow_cards"]) == 1, "foul and card credit the offender's player record")
 	_check(not players.has(""), "stats do not create an empty player record")
@@ -977,6 +997,7 @@ func _test_history_and_analysis() -> void:
 	for issue in report["issues"]:
 		codes.append(String((issue as Dictionary)["code"]))
 	_check(codes.has("low_pass_completion") and codes.has("unproductive_tackling"), "analysis flags low completion and unproductive tackling")
+	_check(not codes.has("low_possession"), "even possession shares are not flagged in a small league")
 	_check(history.analysis_text(effects).contains("Player leaders"), "analysis text includes player leaders")
 
 	var previous_path: String = SaveGame.save_path
@@ -1012,10 +1033,62 @@ func _test_fast_simulation() -> void:
 	_check(first_signature == second_signature, "fast simulation is deterministic for a fixed seed")
 	_check(first.source == "fast", "fast simulation records its source")
 	_check(int((first.stats["home"] as Dictionary)["passes_attempted"]) > 0, "fast simulation records passes")
-	_check((first.stats["players"] as Dictionary).size() == 22, "fast simulation records all 22 starters")
+	var player_count: int = (first.stats["players"] as Dictionary).size()
+	_check(player_count >= 21 and player_count <= 22, "fast simulation records 21 outfielders, plus keepers only when they save")
+	var players: Dictionary = first.stats["players"]
+	var pass_rates_ok := true
+	for player_id in players:
+		var player: Dictionary = players[player_id]
+		if int(player["passes_completed"]) > int(player["passes_attempted"]):
+			pass_rates_ok = false
+	_check(pass_rates_ok, "fast simulation never credits more completions than pass attempts")
+	var home_club: ClubData = null
+	var away_club: ClubData = null
+	for club in GameData.clubs:
+		if club.id == fixture.home_club_id:
+			home_club = club
+		if club.id == fixture.away_club_id:
+			away_club = club
+	if home_club != null and away_club != null:
+		var keeper_ids := [String(home_club.get_starters()[0].id), String(away_club.get_starters()[0].id)]
+		var keepers_clean := true
+		for keeper_id in keeper_ids:
+			var keeper: Dictionary = players.get(keeper_id, {})
+			if int(keeper.get("touches", 0)) > 0 or int(keeper.get("passes_attempted", 0)) > 0 or int(keeper.get("shots_taken", 0)) > 0:
+				keepers_clean = false
+		_check(keepers_clean, "fast simulation keeps goalkeepers out of outfield actions")
+	var first_home: Dictionary = first.stats["home"]
+	var first_away: Dictionary = first.stats["away"]
+	var combined := float(first_home["control_seconds"]) + float(first_away["control_seconds"])
+	_check(is_equal_approx(combined, GameData.config.get_match_duration_seconds()), "simulated possession accounts for one match (%.0fs)" % combined)
 	var max_goals: int = int((first.stats["home"] as Dictionary)["goals"]) + int((first.stats["away"] as Dictionary)["goals"])
 	_check(max_goals >= 0 and max_goals < 25, "fast simulation produces a plausible score")
 	_check(first.home_goals >= 0 and first.away_goals >= 0, "fast simulation result uses the recorded score")
+
+	RngService.set_seed(9001)
+	var batch_fixtures := FixtureGenerator.generate(GameData.leagues[0])
+	var batch_fouls := 0
+	var batch_cards := 0
+	var batch_sot_ok := true
+	for batch_fixture in batch_fixtures:
+		var batch_record := simulator.simulate(batch_fixture)
+		if batch_record == null:
+			continue
+		var home_side: Dictionary = batch_record.stats["home"]
+		var away_side: Dictionary = batch_record.stats["away"]
+		for side: Dictionary in [home_side, away_side]:
+			batch_fouls += int(side["fouls"])
+			batch_cards += int(side["yellow_cards"]) + int(side["red_cards"])
+		# Saves are credited to the defending side, so a team's on-target
+		# shots are its own goals plus the saves made by its opponent.
+		if int(home_side["shots_on_target"]) != int(home_side["goals"]) + int(away_side["saves"]):
+			batch_sot_ok = false
+		if int(away_side["shots_on_target"]) != int(away_side["goals"]) + int(home_side["saves"]):
+			batch_sot_ok = false
+	_check(batch_sot_ok, "simulated on-target shots always resolve to a goal or a save")
+	_check(batch_fouls > 0 and batch_cards > 0, "simulated fouls and cards are generated")
+	var fouls_per_team := float(batch_fouls) / maxf(float(batch_fixtures.size()) * 2.0, 1.0)
+	_check(fouls_per_team > 5.0 and fouls_per_team < 20.0, "simulated foul volume is in a credible range (%.1f per team)" % fouls_per_team)
 
 
 func _test_physics() -> void:
@@ -1115,6 +1188,15 @@ func _test_match_scene() -> void:
 	var scene_data: Dictionary = scene_stats.to_dict()
 	var home_data: Dictionary = scene_data["home"]
 	_check(int(home_data["shots"]) == 1, "match scene records a shot through the kick hook")
+	var save_event := RuleEvent.create(RuleEvent.Type.SAVE, "test save", (views[11] as RigidBody3D).player_id, FMEnums.Side.AWAY)
+	instance.call("_on_rule_event", save_event)
+	var after_save: Dictionary = scene_stats.to_dict()
+	_check(int((after_save["home"] as Dictionary)["shots_on_target"]) == 1, "live save records an on-target shot for the shooter")
+	_check(int((after_save["away"] as Dictionary)["saves"]) == 1, "live save still credits the keeper")
+	var goal_event := RuleEvent.create(RuleEvent.Type.GOAL, "test goal", "", FMEnums.Side.HOME)
+	instance.call("_on_rule_event", goal_event)
+	var after_goal: Dictionary = scene_stats.to_dict()
+	_check(int((after_goal["home"] as Dictionary)["shots_on_target"]) == 2 and int((after_goal["home"] as Dictionary)["goals"]) == 1, "live goal records an on-target shot and the score")
 	var moved := views[9] as RigidBody3D
 	moved.global_position = Vector3(-40.0, 1.0, 0.0)
 	var match_rules: RulesEngine = instance.call("get_rules_engine")

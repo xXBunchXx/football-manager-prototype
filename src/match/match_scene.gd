@@ -113,8 +113,19 @@ func _on_tackle_won_for_stats(player: RigidBody3D) -> void:
 
 
 func _on_rule_event(event: RuleEvent) -> void:
-	if event.type == RuleEvent.Type.GOAL and ball.last_kicker != null and ball.last_kicker.side == event.side:
+	var same_side_kicker: bool = ball.last_kicker != null and ball.last_kicker.side == event.side
+	if event.type == RuleEvent.Type.GOAL and same_side_kicker:
 		event.offender_id = ball.last_kicker.player_id
+	# On-target shots are the shots that end in a goal or a save. Live play has
+	# no shot-placement event, so the rule event is the reliable source and
+	# keeps live records consistent with the fast simulator.
+	if event.type == RuleEvent.Type.GOAL:
+		var goal_shooter_id: String = event.offender_id if same_side_kicker else ""
+		stats.record_shot_on_target(goal_shooter_id, event.side)
+	elif event.type == RuleEvent.Type.SAVE:
+		var attack_side: int = 1 - event.side
+		var shooter_id: String = ball.last_kicker.player_id if ball.last_kicker != null and ball.last_kicker.side == attack_side else ""
+		stats.record_shot_on_target(shooter_id, attack_side)
 	stats.record_event(event)
 	if event.type == RuleEvent.Type.RESTART or event.type == RuleEvent.Type.FOUL or event.type == RuleEvent.Type.OFFSIDE:
 		pending_pass.clear()

@@ -68,14 +68,14 @@ const SIMULATION_KEYS := [
 	"tackle_attempt_base", "tackle_modifier_chance_scale", "tackle_win_base",
 	"tackle_win_attribute_scale", "tackle_foul_chance", "shot_goal_base",
 	"shot_goal_attribute_scale", "shot_save_base", "shot_save_keeper_scale",
-	"shot_on_target_base", "shot_wide_penalty", "min_chance", "max_chance",
+	"shot_wide_penalty", "min_chance", "max_chance",
 	"possession_seconds_per_possession",
 ]
 
 const ANALYSIS_KEYS := [
 	"min_pass_completion_rate", "max_tackles_per_match", "min_tackle_win_rate",
 	"max_fouls_per_tackle", "min_shot_conversion", "min_shots_per_match",
-	"min_possession_share",
+	"min_possession_share_ratio",
 ]
 
 var action_attribute_weights: Dictionary = {}

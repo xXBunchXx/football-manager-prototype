@@ -27,6 +27,10 @@ func simulate(fixture: Fixture, source_value: String = "fast") -> MatchRecord:
 
 	_simulate_side(home_side, away_side, FMEnums.Side.HOME, FMEnums.Side.AWAY, stats)
 	_simulate_side(away_side, home_side, FMEnums.Side.AWAY, FMEnums.Side.HOME, stats)
+	# Control is credited once per possession at the start of that possession.
+	# Scale the synthetic seconds to one match so the two sides sum to 90
+	# minutes and possession shares stay comparable between records.
+	stats.normalize_control(GameData.config.get_match_duration_seconds())
 
 	var result := MatchResult.create(
 		fixture,
@@ -99,7 +103,6 @@ func _challenge(defender: Dictionary, carrier: Dictionary, attack_side: int, def
 	if RngService.chance(win_value):
 		stats.record_tackle_win(defender_id, defend_side)
 		stats.record_touch(defender_id, defend_side)
-		stats.record_control(defend_side, effects.simulation_value("possession_seconds_per_possession") * 0.5, defender_id)
 		return true
 	if RngService.chance(effects.simulation_value("tackle_foul_chance")):
 		var severity := _roll_foul_severity()
@@ -176,7 +179,6 @@ func _execute_pass(action: String, zone: String, carrier: Dictionary, attackers:
 	if RngService.chance(chance_value):
 		stats.record_pass_completion(String(carrier["id"]), receiver_id, attack_side, receiver_id)
 		stats.record_touch(receiver_id, attack_side)
-		stats.record_control(attack_side, effects.simulation_value("possession_seconds_per_possession") * 0.25, receiver_id)
 
 
 func _execute_dribble(carrier: Dictionary, defender: Dictionary, attack_side: int, defend_side: int, stats: MatchStats) -> void:
@@ -190,19 +192,20 @@ func _execute_dribble(carrier: Dictionary, defender: Dictionary, attack_side: in
 	var carrier_id := String(carrier["id"])
 	if RngService.chance(chance_value):
 		stats.record_dribble(carrier_id, attack_side, true)
-		stats.record_control(attack_side, effects.simulation_value("possession_seconds_per_possession") * 0.35, carrier_id)
 		return
 	stats.record_dribble(carrier_id, attack_side, false)
 	var defender_id := String(defender["id"])
 	stats.record_tackle_attempt(defender_id, defend_side)
 	stats.record_tackle_win(defender_id, defend_side)
 	stats.record_touch(defender_id, defend_side)
-	stats.record_control(defend_side, effects.simulation_value("possession_seconds_per_possession") * 0.35, defender_id)
 
 
 func _execute_shoot(carrier: Dictionary, defenders: Array, zone: String, attack_side: int, defend_side: int, stats: MatchStats) -> void:
 	var carrier_id := String(carrier["id"])
 	stats.record_kick(attack_side, false, "shoot", carrier_id, "")
+	# A shot is counted on target only when it ends as a goal or a save. The
+	# old third "on target, no outcome" bucket inflated SoT totals without
+	# affecting the score, so on-target now means a resolved goal attempt.
 	var profile: StatProfile = carrier["profile"]
 	var neutral := effects.context_value("attribute_neutral")
 	var scale := effects.simulation_value("shot_goal_attribute_scale")
@@ -226,8 +229,6 @@ func _execute_shoot(carrier: Dictionary, defenders: Array, zone: String, attack_
 	if RngService.chance(save_value):
 		stats.record_shot_on_target(carrier_id, attack_side)
 		stats.record_event(RuleEvent.create(RuleEvent.Type.SAVE, "save by %s" % keeper["id"], String(keeper["id"]), defend_side))
-	elif RngService.chance(effects.simulation_value("shot_on_target_base")):
-		stats.record_shot_on_target(carrier_id, attack_side)
 
 
 func _build_side(club_id: String, side: int, team: TeamInstructions) -> Array:
@@ -259,10 +260,12 @@ func _touch_weights(players: Array) -> Array:
 	var scale := effects.simulation_value("touch_attribute_scale")
 	var weights: Array = []
 	for player in players:
-		var profile: StatProfile = player["profile"]
 		var slot_weight := 1.0
 		if int(player["slot"]) < slots.size():
 			slot_weight = float(slots[int(player["slot"])])
+		if player["role"] == "gk":
+			slot_weight = 0.0
+		var profile: StatProfile = player["profile"]
 		var skill := 1.0 + (float(profile.technique) - effects.context_value("attribute_neutral")) * scale
 		weights.append(maxf(0.0, slot_weight * skill))
 	return weights
@@ -286,7 +289,7 @@ func _pick_receiver(players: Array, carrier_id: String) -> Dictionary:
 	var scale := effects.simulation_value("receiver_attribute_scale")
 	var weights: Array = []
 	for player in players:
-		if String(player["id"]) == carrier_id:
+		if String(player["id"]) == carrier_id or player["role"] == "gk":
 			weights.append(0.0)
 			continue
 		var slot_weight := 1.0

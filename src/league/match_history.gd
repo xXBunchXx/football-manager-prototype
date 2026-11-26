@@ -241,6 +241,10 @@ func _build_issues(clubs: Dictionary, effects: StatEffects) -> Array:
 		return issues
 	# Ignore single-match noise; a pattern needs roughly half a season of data.
 	var sample_attempts := effects.simulation_value("possessions_per_team") * float(records.size()) * 0.5
+	# Possession is relative to the field size: an even share in a six-club
+	# league is 1/6, so a fixed absolute floor would flag every club.
+	var even_share := 1.0 / maxf(2.0, float(clubs.size()))
+	var possession_floor := even_share * effects.analysis_value("min_possession_share_ratio")
 	for club_id in clubs:
 		var club: Dictionary = clubs[club_id]
 		var name := _club_name(club_id)
@@ -256,7 +260,7 @@ func _build_issues(clubs: Dictionary, effects: StatEffects) -> Array:
 			issues.append(_issue("shot_quality", "medium", "%s averages %.1f shots with %.1f%% conversion" % [
 				name, _num(club, "shots_per_match"), _num(club, "shot_conversion") * 100.0,
 			], club_id))
-		if records.size() >= 3 and _num(club, "possession_share") < effects.analysis_value("min_possession_share"):
+		if records.size() >= 3 and _num(club, "possession_share") < possession_floor:
 			issues.append(_issue("low_possession", "medium", "%s sees only %.1f%% of the ball" % [name, _num(club, "possession_share") * 100.0], club_id))
 	return issues
 

@@ -75,6 +75,20 @@ project. Update this document in the same change if a convention changes.
   clock (1x); `FastMatchSimulator` is a separate statistical model for aggregate
   analysis, never a replacement for physics. Both emit `MatchRecord`s so the
   analysis cannot tell them apart except by the `source` field.
+- In bulk simulation, control time is credited once per possession and
+  `MatchStats.normalize_control()` scales it to one match; live matches never
+  normalize because their control is measured in real time. Keepers are excluded
+  from carrier, receiver and defender selection — they only enter player records
+  when they make a save.
+- Analysis thresholds are field-relative: `min_possession_share_ratio` is a
+  fraction of an even share (`1 / club_count`), never an absolute share. A
+  completed pass credits only the kicker, so a player can never exceed 100%
+  completion.
+- On-target shots resolve to a goal or a save in both live and bulk records;
+  there is no "on target, no outcome" bucket. Live play derives SoT from goal
+  and save rule events. Foul/card chances live in `rules.json` for live play and
+  in the `simulation`/`analysis` blocks of `stat_effects.json` for bulk play —
+  never hardcoded in GDScript.
 - Match history is append-only in the save: `SeasonManager.save()` must preserve
   non-season keys such as `match_history`, and `LeagueManager` is the only
   scene-facing writer. Standings still come only from fixtures; history explains
