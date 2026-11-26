@@ -48,7 +48,11 @@ func decide(view: RigidBody3D, ctx: MatchContext) -> DecisionResult:
 	var target := _target_for(best_key, view, ctx, instructions)
 	var pass_to := ""
 	if best_key == "pass":
-		var mate := ctx.best_pass_target(view)
+		var mate := ctx.best_pass_target(
+			view,
+			effects.context_value("pass_forward_weight"),
+			effects.context_value("pass_space_weight")
+		)
 		if mate != null:
 			pass_to = mate.player_id
 			target = mate.global_position
@@ -102,6 +106,9 @@ func _stamina_score(key: String, state: PlayerState) -> float:
 func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructions: PlayerInstructions) -> float:
 	var score := 0.0
 	var ball_position := ctx.ball.global_position if ctx.ball != null else view.global_position
+	var ball_distance := MatchContext.flat_distance(view.global_position, ball_position)
+	var in_control_range := ball_distance <= effects.context_value("ball_control_radius_m")
+	var is_carrier := ctx.ball_carrier() == view
 	match key:
 		"shoot":
 			# Shooting is only relevant when the ball is actually at the player's
@@ -126,8 +133,17 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 		"press", "chase":
 			var distance := MatchContext.flat_distance(view.global_position, ball_position)
 			var radius := effects.context_value("press_radius_m")
+			# Only the closest team-mate should chase; the rest hold shape or
+			# pass. This stops the whole side converging on the ball.
+			var rank := ctx.ball_chaser_rank(view)
 			if distance < radius:
 				score += effects.context_value("press_proximity_bonus") * (1.0 - distance / radius)
+				if rank == 0:
+					score += effects.context_value("chase_nearest_bonus")
+				else:
+					score -= float(rank) * effects.context_value("chase_rank_penalty_per_place")
+			elif rank != 0:
+				score -= effects.context_value("chase_out_of_range_penalty")
 		"tackle":
 			var carrier := ctx.ball_carrier()
 			if carrier != null and carrier != view:
@@ -140,6 +156,23 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 		"mark":
 			if instructions.man_mark:
 				score += effects.context_value("mark_proximity_bonus")
+	if key == "mark" and not instructions.man_mark:
+		# Marking is a delegated job, not a generic fallback for every defender.
+		score -= effects.context_value("mark_unassigned_penalty")
+	if key == "pass" or key == "dribble" or key == "shoot":
+		if not in_control_range:
+			# Without this, dribble scores highly from 30 m away and every
+			# outfielder "dribbles" toward a loose ball as one mob.
+			score -= effects.context_value("skill_action_out_of_range_penalty")
+	if is_carrier:
+		# Once the ball is at a player's feet, reward an on-ball action instead
+		# of passive control: without this, support/chase win and play stalls.
+		if key == "pass" or key == "dribble":
+			score += effects.context_value("controlled_skill_action_bonus")
+			if key == "pass":
+				score += effects.context_value("controlled_pass_bonus")
+		elif key == "support" or key == "chase" or key == "press" or key == "mark" or key == "tackle":
+			score += effects.context_value("controlled_other_action_penalty")
 	return score
 
 

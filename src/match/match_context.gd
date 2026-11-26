@@ -49,6 +49,41 @@ func ball_carrier() -> RigidBody3D:
 	return ball.control_owner
 
 
+## Closest outfield player to the ball. Used to decide who is allowed to chase
+## and who steals control, so the whole team does not converge on one spot.
+func nearest_to_ball() -> RigidBody3D:
+	if ball == null:
+		return null
+	var best: RigidBody3D = null
+	var best_distance := INF
+	for view in views:
+		if _is_keeper(view):
+			continue
+		var distance := flat_distance(view.global_position, ball.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = view
+	return best
+
+
+## 0 for the closest team-mate to the ball, 1 for the next closest, and so on.
+func ball_chaser_rank(view: RigidBody3D) -> int:
+	if ball == null or _is_keeper(view):
+		return views.size() + 1
+	var my_distance := flat_distance(view.global_position, ball.global_position)
+	var rank := 0
+	for mate in teammates_of(view):
+		if mate == view or _is_keeper(mate):
+			continue
+		if flat_distance(mate.global_position, ball.global_position) < my_distance:
+			rank += 1
+	return rank
+
+
+func _is_keeper(view: RigidBody3D) -> bool:
+	return view.player_data != null and view.player_data.role_id == "gk"
+
+
 func nearest_opponent(view: RigidBody3D, max_distance: float) -> RigidBody3D:
 	var nearest: RigidBody3D = null
 	var best := max_distance
@@ -64,19 +99,19 @@ func is_pressured(view: RigidBody3D, radius: float) -> bool:
 	return nearest_opponent(view, radius) != null
 
 
-func best_pass_target(view: RigidBody3D) -> RigidBody3D:
+func best_pass_target(view: RigidBody3D, forward_weight: float, space_weight: float) -> RigidBody3D:
 	var best: RigidBody3D = null
 	var best_score := -INF
 	var sign := attack_sign(view)
 	for mate in teammates_of(view):
-		if mate.player_data != null and mate.player_data.role_id == "gk":
+		if _is_keeper(mate):
 			continue
 		var forward := (mate.global_position.x - view.global_position.x) * sign
 		var space := 20.0
 		var marker := nearest_opponent(mate, 100.0)
 		if marker != null:
 			space = flat_distance(mate.global_position, marker.global_position)
-		var score := forward * 0.1 + minf(space, 20.0) * 0.05
+		var score := forward * forward_weight + minf(space, 20.0) * space_weight
 		if score > best_score:
 			best_score = score
 			best = mate

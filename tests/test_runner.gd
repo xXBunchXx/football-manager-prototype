@@ -302,6 +302,46 @@ func _test_decisions() -> void:
 	_check(shape_target.x < 0.0, "support stays in the team's half when the ball is upfield")
 	_check(MatchContext.flat_distance(shape_target, ball.global_position) > 20.0, "support does not collapse onto the ball")
 
+	# Only the nearest outfielder should chase a loose ball; the rest hold shape.
+	var chaser := _make_view(starters[6], strong_club, true, Vector3(30, 1, 0), ctx, 6)
+	var decoy := _make_view(starters[3], strong_club, true, Vector3(10, 1, 0), ctx, 3)
+	ball.reset_to(Vector3(12.0, 1.0, 0.0))
+	_check(ctx.ball_chaser_rank(decoy) == 0, "nearest outfielder is first chaser")
+	_check(ctx.ball_chaser_rank(chaser) > 0, "distant team-mate is not the first chaser")
+	var far_chase_score := float(brain.decide(chaser, ctx).scores["chase"])
+	ball.reset_to(Vector3(30.0, 1.0, 0.0))
+	_check(ctx.ball_chaser_rank(chaser) == 0, "chaser rank follows the ball")
+	var near_chase_score := float(brain.decide(chaser, ctx).scores["chase"])
+	_check(near_chase_score > far_chase_score, "chase utility favours the closest player")
+
+	# On-ball actions beat passive control once the carrier has the ball.
+	ball.reset_to(Vector3(31.0, 1.0, 0.0))
+	ball.set_control(chaser, Vector3(31.0, cfg.ball_radius_m, 0.0))
+	var carrier_scores: Dictionary = brain.decide(chaser, ctx).scores
+	ball.release_control()
+	var free_scores: Dictionary = brain.decide(chaser, ctx).scores
+	_check(float(carrier_scores["pass"]) > float(free_scores["pass"]), "carrier prefers passing")
+	_check(float(carrier_scores["dribble"]) > float(free_scores["dribble"]), "carrier prefers dribbling")
+	_check(float(carrier_scores["support"]) < float(free_scores["support"]), "carrier stops holding a support shape")
+
+	var marker := _make_view(starters[2], strong_club, true, Vector3(-35, 1, 10), ctx, 2)
+	_check(not marker.instructions.man_mark, "default centre-back is not assigned a mark")
+	var unassigned_mark := float(brain.decide(marker, ctx).scores["mark"])
+	marker.instructions = marker.instructions.with_overrides({"man_mark": true})
+	var assigned_mark := float(brain.decide(marker, ctx).scores["mark"])
+	_check(assigned_mark > unassigned_mark + 9.0, "only assigned markers get the mark bonus")
+
+	# A nearby but farther player cannot steal control from the true owner.
+	var rival := _make_view(starters[9], strong_club, true, Vector3(31.0, 1, 0), ctx, 9)
+	ball.global_position = Vector3(30.2, cfg.ball_radius_m, 0.0)
+	ball.set_control(chaser, ball.global_position)
+	var rival_agent := PlayerAgent.new(rival, brain, ctx, effects)
+	rival_agent.decision_timer = 10.0
+	rival.last_decision = DecisionResult.create(FMEnums.Action.SUPPORT, rival.global_position, {}, "")
+	rival_agent.physics_tick(1.0 / 60.0)
+	_check(ball.control_owner == chaser, "farther player does not steal ball control")
+	ball.release_control()
+
 	var agent := PlayerAgent.new(striker, brain, ctx, effects)
 	agent.decision_timer = 10.0
 	striker.last_decision = DecisionResult.create(FMEnums.Action.SUPPORT, Vector3(60, 0, 0), {}, "")

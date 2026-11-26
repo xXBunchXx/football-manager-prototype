@@ -32,6 +32,11 @@ in `Formation`. The ball shifts the whole shape slightly rather than pulling
 everyone to it; `formation_ball_follow_scale` and `formation_max_shift_m` are
 JSON-only tuning keys.
 
+Possession fix: only the closest outfielder chases a loose ball or takes control,
+and pass/dribble/shoot are penalised when the ball is out of reach. Once a player
+owns the ball, pass/dribble win over passive support; marking is only for players
+with `man_mark`. These thresholds are all in `data/stat_effects.json`.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

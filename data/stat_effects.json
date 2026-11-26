@@ -47,6 +47,7 @@
     "pressure_radius_m": 3.0,
     "pressure_pass_bonus": 3.0,
     "mark_proximity_bonus": 2.0,
+    "mark_unassigned_penalty": 10.0,
     "ball_control_radius_m": 1.6,
     "support_spacing_m": 10.0,
     "stamina_penalty_active_scale": 1.0,
@@ -60,6 +61,15 @@
     "gk_lateral_follow_scale": 0.4,
     "formation_ball_follow_scale": 0.35,
     "formation_max_shift_m": 22.0,
+    "chase_nearest_bonus": 2.0,
+    "chase_rank_penalty_per_place": 3.0,
+    "chase_out_of_range_penalty": 8.0,
+    "skill_action_out_of_range_penalty": 10.0,
+    "controlled_skill_action_bonus": 6.0,
+    "controlled_pass_bonus": 2.0,
+    "controlled_other_action_penalty": -5.0,
+    "pass_forward_weight": 0.1,
+    "pass_space_weight": 0.05,
     "scatter_degrees_per_missing_composure": 0.5,
     "speed_floor_fraction": 0.7
   }

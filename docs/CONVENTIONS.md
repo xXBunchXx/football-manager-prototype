@@ -77,6 +77,10 @@ project. Update this document in the same change if a convention changes.
   Keep the ball's influence capped by `formation_ball_follow_scale` and
   `formation_max_shift_m` so the team holds structure. The match camera defaults
   to FOLLOW; keep the ball's `BALL` marker when changing its scene.
+- Loose-ball pursuit is ranked: `MatchContext.ball_chaser_rank()` says who chases,
+  and `PlayerAgent` only lets the nearest outfielder take control. On-ball actions
+  get their bonus only when the ball is in reach; keep the out-of-range penalties
+  and `mark_unassigned_penalty` in `stat_effects.json` when retuning behaviour.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

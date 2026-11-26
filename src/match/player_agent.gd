@@ -76,6 +76,12 @@ func _execute_ball_action() -> void:
 		if ball.control_owner == view:
 			ball.release_control()
 		return
+	# Only the closest outfield player may take control. Otherwise several
+	# nearby pills fight over the ball each frame and it looks like a scrum.
+	if ball.control_owner != view:
+		var nearest := ctx.nearest_to_ball()
+		if nearest != null and nearest != view:
+			return
 
 	var forward := decision.target - view.global_position
 	forward.y = 0.0
