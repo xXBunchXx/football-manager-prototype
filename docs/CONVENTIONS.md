@@ -67,6 +67,11 @@ project. Update this document in the same change if a convention changes.
   `MatchConfig` so the ball and pills cannot fall through the world. Player
   separation belongs in `PlayerAgent` and support lanes in `DecisionBrain`; keep
   both when retuning steering so bodies do not clump.
+- Ball-only modifiers (`shoot_on_sight`, `runs_forward` dribble) are gated by
+  `ball_control_radius_m` in `DecisionBrain`; do not reapply them globally. GK
+  positioning uses `gk_line_depth_m` / `gk_lateral_follow_scale` from
+  `stat_effects.json`, and support targets are clamped by
+  `MatchConfig.support_edge_inset_m`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

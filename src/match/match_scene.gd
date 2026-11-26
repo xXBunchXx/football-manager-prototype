@@ -83,6 +83,8 @@ func _on_ball_kicked_for_stats(kicker: RigidBody3D, is_pass: bool) -> void:
 func _on_rule_event(event: RuleEvent) -> void:
 	stats.record_event(event)
 	MatchEvents.log_event("[rules] %s" % event.description)
+	if event.type == RuleEvent.Type.RESTART and event.restart_type == FMEnums.RestartType.KICKOFF:
+		_reset_players_to_formation()
 	if event.type != RuleEvent.Type.FULL_TIME or fixture_id.is_empty():
 		return
 	var fixture := _fixture_for_match()
@@ -162,11 +164,29 @@ func _spawn_teams() -> void:
 			var view: RigidBody3D = PLAYER_SCENE.instantiate()
 			players_node.add_child(view)
 			view.setup(starters[i], club, is_home)
-			var spot: Vector2 = FORMATION[i]
-			if not is_home:
-				spot.x = -spot.x
-			view.global_position = Vector3(spot.x, 1.0, spot.y)
+			view.global_position = _formation_position(side, i)
 			player_views.append(view)
+
+
+func _formation_position(side: int, index: int) -> Vector3:
+	var spot: Vector2 = FORMATION[index]
+	if side == FMEnums.Side.AWAY:
+		spot.x = -spot.x
+	return Vector3(spot.x, 1.0, spot.y)
+
+
+## After a goal the ball goes back to the centre but the players would still be
+## scattered at the ends. Put them back in shape so kick-off restarts live play.
+func _reset_players_to_formation() -> void:
+	var per_side := GameData.config.starters_per_club
+	for i in player_views.size():
+		var view: RigidBody3D = player_views[i]
+		var side := FMEnums.Side.HOME if i < per_side else FMEnums.Side.AWAY
+		view.global_position = _formation_position(side, i % per_side)
+		view.linear_velocity = Vector3.ZERO
+		view.angular_velocity = Vector3.ZERO
+	for agent in agents:
+		agent.decision_timer = 0.0
 
 
 func _refresh_hud() -> void:

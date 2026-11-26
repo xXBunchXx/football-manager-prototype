@@ -19,6 +19,12 @@ frictionless physics material, `PlayerAgent` adds proximity separation (opponent
 push harder than team-mates), and support targets use stable per-player lanes so
 team-mates spread out instead of stacking on one spot.
 
+Behaviour fix: `shoot_on_sight` and the `runs_forward` dribble bonus now apply only
+when the ball is in control range, so players chase play instead of walking to the
+opponent goal. Goalkeepers anchor near their own goal, support targets are clamped
+to the pitch, and kick-offs return players to their formation. Magnitudes remain
+in `data/stat_effects.json`.
+
 Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`

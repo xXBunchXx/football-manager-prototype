@@ -10,6 +10,7 @@ extends Resource
 @export var goal_height_m: float = 2.44
 @export var ground_thickness_m: float = 0.1
 @export var ground_margin_m: float = 5.0
+@export var support_edge_inset_m: float = 3.0
 
 @export var ball_radius_m: float = 0.11
 @export var ball_mass_kg: float = 0.43

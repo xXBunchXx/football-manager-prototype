@@ -62,8 +62,6 @@ func _instruction_score(key: String, instructions: PlayerInstructions) -> float:
 			score += effects.modifier("duty_attack", key)
 		FMEnums.Duty.DEFEND:
 			score += effects.modifier("duty_defend", key)
-	if instructions.shoot_on_sight:
-		score += effects.modifier("shoot_on_sight", key)
 	match instructions.passing_risk:
 		FMEnums.PassingRisk.RISKY:
 			score += effects.modifier("passing_risk_risky", key)
@@ -79,11 +77,14 @@ func _instruction_score(key: String, instructions: PlayerInstructions) -> float:
 			score += effects.modifier("tackle_aggressive", key)
 		FMEnums.TackleAggression.CAUTIOUS:
 			score += effects.modifier("tackle_cautious", key)
-	match instructions.runs:
-		FMEnums.Runs.FORWARD:
-			score += effects.modifier("runs_forward", key)
-		FMEnums.Runs.HOLD:
-			score += effects.modifier("runs_hold", key)
+	# Dribble appetite is applied in _context_score only when the ball is at
+	# the player's feet; otherwise attackers would walk to the goal without it.
+	if key != "dribble":
+		match instructions.runs:
+			FMEnums.Runs.FORWARD:
+				score += effects.modifier("runs_forward", key)
+			FMEnums.Runs.HOLD:
+				score += effects.modifier("runs_hold", key)
 	if instructions.man_mark:
 		score += effects.modifier("man_mark", key)
 	return score
@@ -103,10 +104,25 @@ func _context_score(key: String, view: RigidBody3D, ctx: MatchContext, instructi
 	var ball_position := ctx.ball.global_position if ctx.ball != null else view.global_position
 	match key:
 		"shoot":
-			var distance := MatchContext.flat_distance(view.global_position, ctx.goal_for(view))
-			var radius := effects.context_value("shoot_range_m")
-			if distance < radius:
-				score += effects.context_value("shoot_near_goal_bonus") * (1.0 - distance / radius)
+			# Shooting is only relevant when the ball is actually at the player's
+			# feet. Without this gate, shoot_on_sight makes attackers run to the
+			# opponent goal from the other end of the pitch and stay there.
+			var reach := effects.context_value("ball_control_radius_m")
+			if MatchContext.flat_distance(view.global_position, ball_position) <= reach:
+				if instructions.shoot_on_sight:
+					score += effects.modifier("shoot_on_sight", "shoot")
+				var distance := MatchContext.flat_distance(view.global_position, ctx.goal_for(view))
+				var radius := effects.context_value("shoot_range_m")
+				if distance < radius:
+					score += effects.context_value("shoot_near_goal_bonus") * (1.0 - distance / radius)
+		"dribble":
+			var reach := effects.context_value("ball_control_radius_m")
+			if MatchContext.flat_distance(view.global_position, ball_position) <= reach:
+				match instructions.runs:
+					FMEnums.Runs.FORWARD:
+						score += effects.modifier("runs_forward", "dribble")
+					FMEnums.Runs.HOLD:
+						score += effects.modifier("runs_hold", "dribble")
 		"press", "chase":
 			var distance := MatchContext.flat_distance(view.global_position, ball_position)
 			var radius := effects.context_value("press_radius_m")
@@ -137,11 +153,22 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 			var carrier := ctx.ball_carrier()
 			return carrier.global_position if carrier != null else ball_position
 		"dribble":
+			if MatchContext.flat_distance(view.global_position, ball_position) > effects.context_value("ball_control_radius_m"):
+				return ball_position
 			return ctx.goal_for(view).lerp(view.global_position, 1.0 - effects.context_value("dribble_advance_m") / cfg.pitch_length_m)
 		"mark":
 			var marker := ctx.nearest_opponent(view, 100.0)
 			return marker.global_position if marker != null else ball_position
 		"support":
+			var sign := ctx.attack_sign(view)
+			if view.player_data != null and view.player_data.role_id == "gk":
+				var own_goal := ctx.own_goal_for(view)
+				var line_x := own_goal.x + sign * effects.context_value("gk_line_depth_m")
+				var lateral := clampf(
+					ball_position.z * effects.context_value("gk_lateral_follow_scale"),
+					-cfg.goal_width_m * 0.5, cfg.goal_width_m * 0.5
+				)
+				return Vector3(line_x, 0.0, lateral)
 			var depth := 0.0
 			match instructions.support_depth:
 				FMEnums.SupportDepth.DEEP:
@@ -158,6 +185,12 @@ func _target_for(key: String, view: RigidBody3D, ctx: MatchContext, instructions
 			# support spot. Width instruction scales how wide the lanes spread.
 			var lane := float(absi(view.player_id.hash()) % 1000) / 999.0 * 2.0 - 1.0
 			var z := clampf(ball_position.z + lane * width, -cfg.pitch_width_m * 0.5 + 2.0, cfg.pitch_width_m * 0.5 - 2.0)
-			return Vector3(ball_position.x + ctx.attack_sign(view) * depth, 0.0, z)
+			var half_l := cfg.pitch_length_m * 0.5
+			var x := clampf(
+				ball_position.x + sign * depth,
+				-half_l + cfg.support_edge_inset_m,
+				half_l - cfg.support_edge_inset_m
+			)
+			return Vector3(x, 0.0, z)
 		_:
 			return ball_position

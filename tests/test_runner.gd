@@ -214,6 +214,7 @@ func _make_view(player: PlayerData, club: ClubData, is_home: bool, position: Vec
 
 
 func _test_decisions() -> void:
+	var cfg := GameData.config
 	var effects := StatEffects.load()
 	_check(effects != null, "stat effects load and validate")
 	if effects == null:
@@ -233,14 +234,24 @@ func _test_decisions() -> void:
 	var strong_club: ClubData = GameData.clubs[1]
 	var weak_club: ClubData = GameData.clubs[4]
 	var striker := _make_view(strong_club.get_starters()[9], strong_club, true, Vector3(38, 1, 0), ctx)
+	ball.reset_to(Vector3(striker.global_position.x - 1.0, cfg.ball_radius_m, 0.0))
 	var striker_decision := brain.decide(striker, ctx)
-	_check(striker_decision.action == FMEnums.Action.SHOOT, "striker inside shooting range chooses shoot")
+	_check(striker_decision.action == FMEnums.Action.SHOOT, "striker with the ball in range chooses shoot")
+	var near_dribble_target: Vector3 = brain.call("_target_for", "dribble", striker, ctx, striker.instructions)
+	_check(near_dribble_target.x > striker.global_position.x, "dribble with the ball advances toward goal")
+	ball.reset_to(Vector3(30.0, 1.0, 0.0))
+	var distant_decision := brain.decide(striker, ctx)
+	_check(distant_decision.action != FMEnums.Action.SHOOT, "shoot-on-sight does not fire from the other end")
+	var far_dribble_target: Vector3 = brain.call("_target_for", "dribble", striker, ctx, striker.instructions)
+	_check(absf(far_dribble_target.x - ball.global_position.x) < 0.01, "dribble without the ball targets the ball")
 
 	var midfielder := _make_view(strong_club.get_starters()[6], strong_club, true, Vector3(-8, 1, 0), ctx)
+	ball.reset_to(Vector3(midfielder.global_position.x + 1.0, cfg.ball_radius_m, 0.0))
 	var base_scores: Dictionary = brain.decide(midfielder, ctx).scores
 	midfielder.instructions = midfielder.instructions.with_overrides({"shoot_on_sight": true})
 	var boosted_scores: Dictionary = brain.decide(midfielder, ctx).scores
-	_check(boosted_scores["shoot"] > base_scores["shoot"], "shoot-on-sight lifts shoot utility")
+	_check(boosted_scores["shoot"] > base_scores["shoot"], "shoot-on-sight lifts shoot utility when the ball is in reach")
+	ball.reset_to(Vector3(30.0, 1.0, 0.0))
 
 	var fresh := _make_view(strong_club.get_starters()[2], strong_club, true, Vector3(-30, 1, 8), ctx)
 	var tired := _make_view(strong_club.get_starters()[2], strong_club, true, Vector3(-30, 1, -8), ctx)
@@ -257,6 +268,19 @@ func _test_decisions() -> void:
 	deep_cb.instructions = deep_cb.instructions.with_overrides({"support_depth": "ADVANCED"})
 	var high_target: Vector3 = brain.decide(deep_cb, ctx).target
 	_check(deep_target.x < high_target.x, "support depth shifts the target up or down pitch")
+
+	var home_gk := _make_view(strong_club.get_starters()[0], strong_club, true, Vector3(-48, 1, 0), ctx)
+	var away_gk := _make_view(strong_club.get_starters()[0], strong_club, false, Vector3(48, 1, 0), ctx)
+	var home_gk_target: Vector3 = brain.call("_target_for", "support", home_gk, ctx, home_gk.instructions)
+	var away_gk_target: Vector3 = brain.call("_target_for", "support", away_gk, ctx, away_gk.instructions)
+	_check(home_gk_target.x < -45.0 and away_gk_target.x > 45.0, "goalkeepers anchor near their own goal")
+
+	ball.reset_to(Vector3(-60.0, 1.0, 0.0))
+	var deep_out := _make_view(strong_club.get_starters()[1], strong_club, true, Vector3(-40, 1, 0), ctx)
+	deep_out.instructions = deep_out.instructions.with_overrides({"support_depth": "DEEP"})
+	var clamped_target: Vector3 = brain.call("_target_for", "support", deep_out, ctx, deep_out.instructions)
+	_check(clamped_target.x >= -cfg.pitch_length_m * 0.5, "support targets stay on the pitch")
+	ball.reset_to(Vector3(30.0, 1.0, 0.0))
 
 	var wide_lanes: Array[float] = []
 	for starter in strong_club.get_starters():
@@ -652,6 +676,13 @@ func _test_match_scene() -> void:
 	var scene_data: Dictionary = scene_stats.to_dict()
 	var home_data: Dictionary = scene_data["home"]
 	_check(int(home_data["shots"]) == 1, "match scene records a shot through the kick hook")
+
+	var moved := views[9] as RigidBody3D
+	moved.global_position = Vector3(-40.0, 1.0, 0.0)
+	var match_rules: RulesEngine = instance.call("get_rules_engine")
+	match_rules.call("_begin_restart", FMEnums.RestartType.KICKOFF, Vector3.ZERO, -1)
+	_check(moved.global_position.x > 15.0, "kickoff returns players to their formation")
+	_check(absf(scene_ball.global_position.x) < 0.01 and absf(scene_ball.global_position.z) < 0.01, "kickoff resets the ball to centre")
 	instance.free()
 
 

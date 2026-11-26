@@ -18,7 +18,8 @@ const REQUIRED_CONTEXT := [
 	"mark_proximity_bonus", "ball_control_radius_m", "support_spacing_m",
 	"stamina_penalty_active_scale", "stamina_penalty_passive_scale",
 	"support_deep_m", "support_advanced_m", "support_narrow_m",
-	"support_wide_m", "dribble_advance_m",
+	"support_wide_m", "dribble_advance_m", "gk_line_depth_m",
+	"gk_lateral_follow_scale",
 	"scatter_degrees_per_missing_composure", "speed_floor_fraction",
 ]
 
