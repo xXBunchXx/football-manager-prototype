@@ -36,6 +36,7 @@ GameData="*res://src/autoload/game_data.gd"
 RngService="*res://src/autoload/rng_service.gd"
 MatchEvents="*res://src/autoload/match_events.gd"
 SaveGame="*res://src/autoload/save_game.gd"
+LeagueManager="*res://src/autoload/league_manager.gd"
 
 [rendering]
 

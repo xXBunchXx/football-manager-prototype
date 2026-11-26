@@ -8,8 +8,10 @@ project. Update this document in the same change if a convention changes.
 - `data/` — hand-editable JSON fixtures: generated players/clubs/leagues plus
   `instructions.json`, `stat_effects.json` and `rules.json` for tuning.
 - `src/core/` — Resource classes, enums, config. No scene logic here.
-- `src/autoload/` — global singletons: `GameData`, `RngService`, `MatchEvents`, `SaveGame`.
+- `src/autoload/` — global singletons: `GameData`, `RngService`, `MatchEvents`,
+  `SaveGame`, `LeagueManager`.
 - `src/match/` — match simulation, agents, ball, rules engine and debug overlay.
+- `src/league/` — fixtures, table and season manager. No scene logic here.
 - `src/ui/` — one script per screen/widget in `scenes/ui/`.
 - `src/util/` — small stateless helpers (`FixtureLoader`, math).
 - `tests/` — headless assertions and the batch calibration harness.
@@ -38,8 +40,8 @@ project. Update this document in the same change if a convention changes.
   Never use Godot 3 aliases or `connect("signal", self, "method")`.
 - Run `tests/run_checks.sh` after every script edit. It parses every script with
   the real binary and runs the headless test scene. `--check-only` alone cannot
-  resolve autoload globals (`GameData`, `RngService`, `MatchEvents`, `SaveGame`),
-  so scripts using them are validated by the test scene instead.
+  resolve autoload globals (`GameData`, `RngService`, `MatchEvents`, `SaveGame`,
+  `LeagueManager`), so scripts using them are validated by the test scene instead.
 
 ## Data rules
 
@@ -55,6 +57,9 @@ project. Update this document in the same change if a convention changes.
 - Rules live in one class per concern under `src/match/rules/`; `RulesEngine`
   orchestrates them, owns match state and raises `RuleEvent`s. Rule classes stay
   headless-testable: the scene owns presentation and body placement.
+- Season progress lives in the fixture list; standings are derived from played
+  fixtures, never stored as a second source of truth. `LeagueManager` is the
+  scene-facing wrapper around the headless `SeasonManager`.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

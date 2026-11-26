@@ -15,6 +15,7 @@ func _ready() -> void:
 	_test_instructions()
 	await _test_decisions()
 	await _test_rules()
+	_test_league()
 	_test_match_scene()
 	await _test_ball()
 	_test_rng()
@@ -429,6 +430,101 @@ func _test_rules() -> void:
 		view.free()
 	ball.free()
 	engine_ball.free()
+
+
+func _test_league() -> void:
+	var league: LeagueData = GameData.leagues[0]
+	var fixtures := FixtureGenerator.generate(league)
+	_check(fixtures.size() == 30, "double round-robin creates 30 fixtures")
+	var rounds: Dictionary = {}
+	for fixture in fixtures:
+		rounds[fixture.round] = true
+	_check(rounds.size() == 10, "fixtures are spread over ten rounds")
+
+	var home_counts: Dictionary = {}
+	var away_counts: Dictionary = {}
+	var pair_counts: Dictionary = {}
+	for fixture in fixtures:
+		home_counts[fixture.home_club_id] = int(home_counts.get(fixture.home_club_id, 0)) + 1
+		away_counts[fixture.away_club_id] = int(away_counts.get(fixture.away_club_id, 0)) + 1
+		var key := "%s|%s" % [fixture.home_club_id, fixture.away_club_id]
+		pair_counts[key] = int(pair_counts.get(key, 0)) + 1
+	var balanced := true
+	var all_pairs := true
+	for club_id in league.club_ids:
+		if int(home_counts.get(club_id, 0)) != 5 or int(away_counts.get(club_id, 0)) != 5:
+			balanced = false
+	for i in league.club_ids.size():
+		for j in league.club_ids.size():
+			if i == j:
+				continue
+			var key := "%s|%s" % [league.club_ids[i], league.club_ids[j]]
+			if int(pair_counts.get(key, 0)) != 1:
+				all_pairs = false
+	_check(balanced, "each club has five home and five away fixtures")
+	_check(all_pairs, "each ordered club pairing appears once")
+
+	var season := SeasonState.new()
+	season.league_id = league.id
+	season.fixtures = fixtures
+	_check(season.next_round() == 1 and season.played_count() == 0, "new season starts at round one")
+	season.fixtures[0].played = true
+	season.fixtures[0].home_goals = 2
+	season.fixtures[0].away_goals = 0
+	_check(season.next_round() == 1 and season.played_count() == 1, "played count ignores other round-one games")
+
+	var manager := SeasonManager.new()
+	_check(manager.new_season(league, GameData.clubs), "season manager builds a season")
+	var result := MatchResult.create(fixtures[0], 3, 1)
+	_check(manager.record_result(result), "final score is recorded")
+	_check(not manager.record_result(result), "duplicate result is rejected")
+	var home_row: LeagueTableRow = manager.table.row_for(result.home_club_id)
+	_check(home_row.points == 3 and home_row.goals_for == 3 and home_row.goals_against == 1, "table awards three points for a win")
+	var away_row: LeagueTableRow = manager.table.row_for(result.away_club_id)
+	_check(away_row.points == 0 and away_row.form[0] == "L", "loser gets no points and an L in form")
+	var standings: Array[LeagueTableRow] = manager.table.standings()
+	_check(standings.size() == 6 and standings[0].club_id == result.home_club_id, "standings sort the winner to the top")
+
+	var previous_path: String = SaveGame.save_path
+	SaveGame.set_path("user://fm-league-test.json")
+	_check(manager.save(), "season saves through SaveGame")
+	var loaded := SeasonManager.new()
+	_check(loaded.load_or_new(league, GameData.clubs), "season reloads from JSON")
+	var loaded_fixture: Fixture = loaded.season.fixture_by_id(fixtures[0].id)
+	_check(loaded_fixture != null and loaded_fixture.played and loaded_fixture.home_goals == 3, "saved result survives reload")
+	var loaded_row: LeagueTableRow = loaded.table.row_for(result.home_club_id)
+	_check(loaded_row != null and loaded_row.points == 3, "standings rebuild from saved fixtures")
+	SaveGame.set_path(previous_path)
+
+	_check(LeagueManager.get_fixtures().size() == 30, "league autoload exposes the fixtures")
+	_check(LeagueManager.get_standings().size() == 6, "league autoload exposes six table rows")
+	var league_ui: PackedScene = load("res://scenes/ui/league_scene.tscn")
+	_check(league_ui != null, "league scene resource loads")
+	if league_ui != null:
+		var ui_instance: Node = league_ui.instantiate()
+		add_child(ui_instance)
+		var fixture_buttons: Node = ui_instance.find_child("FixtureList", true, false)
+		_check(fixture_buttons != null, "league scene builds a fixture list")
+		if fixture_buttons != null:
+			_check(fixture_buttons.get_child_count() == 30, "league scene lists all 30 fixtures")
+		ui_instance.free()
+	var playable: Fixture = fixtures[0]
+	for fixture in LeagueManager.get_fixtures():
+		if not fixture.played:
+			playable = fixture
+			break
+	_check(LeagueManager.select_fixture(playable.id), "a fixture can be selected for live play")
+	var packed: PackedScene = load("res://scenes/match_scene.tscn")
+	var instance: Node = packed.instantiate()
+	add_child(instance)
+	var views: Array = instance.call("get_player_views")
+	var home_view: RigidBody3D = views[0]
+	var away_view: RigidBody3D = views[11]
+	_check(String(instance.call("get_fixture_id")) == playable.id, "match scene reads the selected fixture")
+	_check(home_view.club_id == playable.home_club_id, "home side uses the fixture's home club")
+	_check(away_view.club_id == playable.away_club_id, "away side uses the fixture's away club")
+	instance.free()
+	LeagueManager.selected_fixture_id = ""
 
 
 func _test_match_scene() -> void:

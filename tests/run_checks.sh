@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full phase-1 check: standalone parse of every script, then the headless test scene.
+# Full check: standalone parse of every script, then the headless test scene.
 # Autoload globals cannot resolve under --check-only, so those scripts are skipped
 # there and validated by the test scene instead.
 set -uo pipefail
@@ -18,7 +18,7 @@ while IFS= read -r file; do
 	rc=$?
 	if [ $rc -eq 0 ]; then
 		printf 'OK    %s\n' "$rel"
-	elif printf '%s' "$output" | grep -Eq 'Identifier not found: (GameData|RngService|MatchEvents|SaveGame)'; then
+	elif printf '%s' "$output" | grep -Eq 'Identifier not found: (GameData|RngService|MatchEvents|SaveGame|LeagueManager)'; then
 		printf 'SKIP  %s (autoload ref; covered by test scene)\n' "$rel"
 	else
 		printf 'FAIL  %s\n%s\n' "$rel" "$output"

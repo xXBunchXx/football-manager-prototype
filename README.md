@@ -7,7 +7,14 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 7 (match rules) complete: `RulesEngine` orchestrates small, independent
+Phase 8 (league layer) complete: `FixtureGenerator` builds a deterministic
+double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
+one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`
+persists results through `SaveGame`; standings are rebuilt from played fixtures,
+so saves cannot disagree with the table. Full time in a played match records the
+score, and **L** returns to the league screen.
+
+Earlier: Phase 7 (match rules) — `RulesEngine` orchestrates small, independent
 rule classes under `src/match/rules/`. Offside is judged at the pass and resolved
 at first touch; tackle-based fouls roll cards through `PlayerState`; all six
 restarts place the ball from `data/rules.json`; substitutions are capped per club;
@@ -44,10 +51,12 @@ JSON fixtures (six clubs, 108 players, 16 attributes each). To regenerate
 fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
-To look at the match: open `scenes/match_scene.tscn` and press Play
-(K = debug kick, S = substitution).
+To play a season: open `scenes/ui/league_scene.tscn` and press Play, then click a
+fixture. In a match: **K** = debug kick, **S** = substitution, **L** = league
+screen. `scenes/match_scene.tscn` still opens directly for engine work.
 
-Next: phase 8, the league layer — fixtures, standings and season progression.
+Next: phase 9, polish and balance — visual pass, full-season playtest and
+calibration.
 
 ## Run the checks
 

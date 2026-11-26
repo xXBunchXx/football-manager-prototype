@@ -28,8 +28,13 @@ var brain: DecisionBrain = null
 var effects: StatEffects = null
 var rules_engine: RulesEngine = null
 
+var fixture_id: String = ""
+var home_club_id: String = ""
+var away_club_id: String = ""
+
 
 func _ready() -> void:
+	_read_selected_fixture()
 	effects = StatEffects.load()
 	if effects == null:
 		push_error("MatchScene: could not load stat effects")
@@ -63,6 +68,16 @@ func _physics_process(delta: float) -> void:
 
 func _on_rule_event(event: RuleEvent) -> void:
 	MatchEvents.log_event("[rules] %s" % event.description)
+	if event.type != RuleEvent.Type.FULL_TIME or fixture_id.is_empty():
+		return
+	var fixture := _fixture_for_match()
+	if fixture == null:
+		return
+	var result := MatchResult.create(fixture, rules_engine.score_home, rules_engine.score_away)
+	if LeagueManager.record_result(result):
+		MatchEvents.log_event("[league] recorded %d-%d for %s" % [result.home_goals, result.away_goals, fixture_id])
+	else:
+		MatchEvents.log_event("[league] result was not recorded")
 
 
 func request_home_substitution() -> bool:
@@ -80,18 +95,48 @@ func _input(event: InputEvent) -> void:
 		MatchEvents.log_event("debug kick: +X, 18 m/s, 12 deg loft, spin 60")
 	if event is InputEventKey and event.pressed and event.keycode == KEY_S:
 		MatchEvents.log_event("substitution requested: %s" % str(request_home_substitution()))
+	if event is InputEventKey and event.pressed and event.keycode == KEY_L:
+		get_tree().change_scene_to_file("res://scenes/ui/league_scene.tscn")
+
+
+func _read_selected_fixture() -> void:
+	var fixture := LeagueManager.get_selected_fixture()
+	if fixture == null:
+		return
+	fixture_id = fixture.id
+	home_club_id = fixture.home_club_id
+	away_club_id = fixture.away_club_id
+
+
+func _fixture_for_match() -> Fixture:
+	if fixture_id.is_empty():
+		return null
+	return LeagueManager.get_fixture(fixture_id)
+
+
+func _find_club(club_id: String) -> ClubData:
+	for club in GameData.clubs:
+		if club.id == club_id:
+			return club
+	return null
 
 
 func _spawn_teams() -> void:
 	if GameData.clubs.size() < 2:
 		push_error("MatchScene: need at least two clubs")
 		return
+	var home_club := _find_club(home_club_id) if not home_club_id.is_empty() else GameData.clubs[FMEnums.Side.HOME]
+	var away_club := _find_club(away_club_id) if not away_club_id.is_empty() else GameData.clubs[FMEnums.Side.AWAY]
+	if home_club == null or away_club == null:
+		push_error("MatchScene: selected fixture has an unknown club")
+		return
 	var players_node := Node3D.new()
 	players_node.name = "Players"
 	add_child(players_node)
 
+	var clubs: Array[ClubData] = [home_club, away_club]
 	for side in 2:
-		var club: ClubData = GameData.clubs[side]
+		var club: ClubData = clubs[side]
 		var is_home := side == FMEnums.Side.HOME
 		var starters: Array = club.get_starters()
 		for i in starters.size():
@@ -123,3 +168,7 @@ func get_context() -> MatchContext:
 
 func get_rules_engine() -> RulesEngine:
 	return rules_engine
+
+
+func get_fixture_id() -> String:
+	return fixture_id
