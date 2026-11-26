@@ -12,6 +12,12 @@ enum FoulSeverity { NONE, FOUL, YELLOW, RED, PENALTY }
 
 enum Side { HOME, AWAY }
 
+enum Foot { LEFT, RIGHT, BOTH }
+
+enum Position { GK, CB, LB, RB, DM, CM, AM, LW, RW, ST }
+
+enum TeamTier { WEAK, MID, STRONG }
+
 const LAYER_WORLD := 1
 const LAYER_PLAYER := 2
 const LAYER_BALL := 4

@@ -21,6 +21,9 @@ extends Resource
 
 @export var speed_steps: Array = [0.0, 1.0, 2.0, 4.0]
 
+@export var starters_per_club: int = 11
+@export var squad_size: int = 18
+
 @export var seed: int = 20261126
 
 

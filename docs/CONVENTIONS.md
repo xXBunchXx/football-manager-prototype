@@ -12,6 +12,7 @@ project. Update this document in the same change if a convention changes.
 - `src/ui/` — one script per screen/widget in `scenes/ui/`.
 - `src/util/` — small stateless helpers (`FixtureLoader`, math).
 - `tests/` — headless assertions and the batch calibration harness.
+- `tools/` — development utilities that regenerate data fixtures (`generate_fixtures.py`).
 
 ## Files and nodes
 
@@ -56,6 +57,10 @@ Reference them through `FMEnums.LAYER_*`, never raw integers.
 ## Verification
 
 - Headless suite: `Godot_v4.7.2-stable_linux.x86_64 --headless --path . res://tests/test_scene.tscn`
+- `--check-only` relies on Godot's global class cache, so new `class_name` scripts
+  must be scanned by the editor before standalone checks work; `run_checks.sh`
+  does this automatically and also applies timeouts so a failed autoload cannot
+  hang the run.
 - Exit code 0 means all assertions passed; any `push_error` is a failure.
 - Visual work (pitch, pills, UI) requires the user to look at it — headless tests
   cannot verify appearance.

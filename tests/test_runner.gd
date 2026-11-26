@@ -11,6 +11,7 @@ var _received_events: Array[String] = []
 func _ready() -> void:
 	MatchEvents.event_logged.connect(_on_event_logged)
 	_test_config()
+	_test_data()
 	_test_rng()
 	_test_events()
 	_test_save()
@@ -97,3 +98,59 @@ func _test_fixture_loader() -> void:
 	var dir := DirAccess.open("user://")
 	if dir != null:
 		dir.remove("fm_phase1_fixture.json")
+
+
+func _test_data() -> void:
+	var loaded := GameData.load_fixtures()
+	_check(loaded, "fixtures load from res://data/")
+	_check(GameData.clubs.size() == 6, "six clubs loaded")
+	_check(GameData.leagues.size() == 1, "one league loaded")
+	_check(GameData.players_by_id.size() == 108, "108 unique players loaded")
+
+	var structure_ok := true
+	var attributes_ok := true
+	var seen_ids := {}
+	var cfg := MatchConfig.new()
+	for club in GameData.clubs:
+		if club.squad.size() != cfg.squad_size:
+			structure_ok = false
+		if club.get_starters().size() != cfg.starters_per_club:
+			structure_ok = false
+		if club.get_bench().size() != cfg.squad_size - cfg.starters_per_club:
+			structure_ok = false
+		for player in club.squad:
+			if seen_ids.has(player.id):
+				structure_ok = false
+			seen_ids[player.id] = true
+			for key in StatProfile.ATTRIBUTE_NAMES:
+				var value := player.attributes.get_attribute(key)
+				if value < StatProfile.MIN_VALUE or value > StatProfile.MAX_VALUE:
+					attributes_ok = false
+	_check(structure_ok, "squad sizes, starter counts and unique ids")
+	_check(attributes_ok, "all attributes within 1..20")
+
+	var weak := _average_tier(FMEnums.TeamTier.WEAK)
+	var mid := _average_tier(FMEnums.TeamTier.MID)
+	var strong := _average_tier(FMEnums.TeamTier.STRONG)
+	_check(weak < mid and mid < strong, "tier averages ordered weak < mid < strong")
+	print("[data] tier averages: weak=%.2f mid=%.2f strong=%.2f" % [weak, mid, strong])
+
+	var bad_attributes := StatProfile.new().to_dict()
+	bad_attributes["pace"] = 99
+	_check(not StatProfile.is_valid_dict(bad_attributes), "StatProfile rejects out-of-range values")
+
+	var sample: PlayerData = GameData.clubs[0].squad[0]
+	var rebuilt := PlayerData.from_dict(sample.to_dict())
+	_check(rebuilt != null and rebuilt.display_name() == sample.display_name(), "PlayerData round trip")
+
+
+func _average_tier(tier: int) -> float:
+	var total := 0.0
+	var count := 0
+	for club in GameData.clubs:
+		if club.tier != tier:
+			continue
+		for player in club.squad:
+			total += player.attributes.average()
+			count += 1
+	return total / float(count) if count > 0 else 0.0

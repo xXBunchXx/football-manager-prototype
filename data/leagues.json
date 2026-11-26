@@ -1,0 +1,14 @@
+[
+  {
+    "id": "premier-division",
+    "name": "Premier Division",
+    "club_ids": [
+      "ashford-city",
+      "kingsport-rovers",
+      "northbridge-united",
+      "riverton-athletic",
+      "dunmoor-town",
+      "westfield-fc"
+    ]
+  }
+]

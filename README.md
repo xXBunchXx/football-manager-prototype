@@ -7,10 +7,14 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 1 (foundation) complete: folder tree, autoloads, `MatchConfig`, enums,
-physics layer names, headless test runner.
+Phase 2 (player/club data) complete: typed Resources (`PlayerData`,
+`StatProfile`, `ClubData`, `LeagueData`) loaded and validated from JSON fixtures
+in `data/`. Six clubs, 108 players, 16 attributes per player.
 
-Next: phase 2, typed player/club Resources loaded from JSON fixtures.
+To regenerate/rebalance the fixtures, edit `tools/generate_fixtures.py` and run
+`python3 tools/generate_fixtures.py` from the project root.
+
+Next: phase 3, the 3D pitch and pill players.
 
 ## Run the checks
 
