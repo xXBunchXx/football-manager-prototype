@@ -11,3 +11,24 @@ script = ExtResource("1_match")
 
 [node name="Ball" parent="." instance=ExtResource("3_ball")]
 position = Vector3(0, 0.2, 0)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 420.0
+offset_bottom = 112.0
+
+[node name="Layout" type="VBoxContainer" parent="HUD/Panel"]
+theme_override_constants/separation = 4
+
+[node name="ScoreLabel" type="Label" parent="HUD/Panel/Layout"]
+text = "HOME 0 - 0 AWAY"
+
+[node name="ClockLabel" type="Label" parent="HUD/Panel/Layout"]
+text = "00:00 (+0)  PLAYING"
+
+[node name="EventLabel" type="Label" parent="HUD/Panel/Layout"]
+text = "Waiting for kick-off"
+autowrap_mode = 3

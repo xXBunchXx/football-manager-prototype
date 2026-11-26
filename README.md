@@ -7,7 +7,14 @@ Repository: https://github.com/xXBunchXx/football-manager-prototype (public).
 
 ## Status
 
-Phase 8 (league layer) complete: `FixtureGenerator` builds a deterministic
+Phase 9 (playtest instrumentation) complete: the match scene has a compact HUD
+(score, clock/added time, state, last event) and `MatchStats` counts shots,
+passes, possession, goals, fouls and cards by side. Full time appends a JSON
+record to `user://fm_playtest_log.jsonl`; **P** prints the current summary to the
+event log. `tools/calibrate_playtest.py` aggregates those records. Balance changes
+remain JSON-only. Actual weight tuning is pending your playtest.
+
+Earlier: Phase 8 (league layer) — `FixtureGenerator` builds a deterministic
 double round-robin (30 fixtures, 10 rounds). Every fixture is playable — click
 one in `scenes/ui/league_scene.tscn`, or use **Play next fixture**. `LeagueManager`
 persists results through `SaveGame`; standings are rebuilt from played fixtures,
@@ -52,11 +59,18 @@ fixtures, edit `tools/generate_fixtures.py` and run
 `python3 tools/generate_fixtures.py` from the project root.
 
 To play a season: open `scenes/ui/league_scene.tscn` and press Play, then click a
-fixture. In a match: **K** = debug kick, **S** = substitution, **L** = league
-screen. `scenes/match_scene.tscn` still opens directly for engine work.
+fixture. In a match: **K** = debug kick, **S** = substitution, **P** = print
+stats, **L** = league screen. `scenes/match_scene.tscn` still opens directly for
+engine work.
 
-Next: phase 9, polish and balance — visual pass, full-season playtest and
-calibration.
+Next: apply the calibration findings from your playtest, changing only
+`data/stat_effects.json` and `data/rules.json`.
+
+Aggregate a playtest log with:
+
+```bash
+python3 tools/calibrate_playtest.py
+```
 
 ## Run the checks
 

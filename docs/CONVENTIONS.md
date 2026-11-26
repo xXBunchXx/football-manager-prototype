@@ -60,6 +60,9 @@ project. Update this document in the same change if a convention changes.
 - Season progress lives in the fixture list; standings are derived from played
   fixtures, never stored as a second source of truth. `LeagueManager` is the
   scene-facing wrapper around the headless `SeasonManager`.
+- Balance changes are JSON-only: tune `stat_effects.json` or `rules.json`, not
+  GDScript weights. `MatchStats` records playtest measurements; the calibration
+  tool only reports them.
 - Resources are reference types. `PlayerData` and friends are immutable definitions;
   per-match mutable values (stamina, morale, form, cards, mark assignment,
   event counters) belong in a separate `PlayerState` object that stores only the

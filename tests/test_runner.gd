@@ -16,6 +16,7 @@ func _ready() -> void:
 	await _test_decisions()
 	await _test_rules()
 	_test_league()
+	_test_stats()
 	_test_match_scene()
 	await _test_ball()
 	_test_rng()
@@ -527,6 +528,29 @@ func _test_league() -> void:
 	LeagueManager.selected_fixture_id = ""
 
 
+func _test_stats() -> void:
+	var stats := MatchStats.new()
+	stats.record_kick(FMEnums.Side.HOME, false)
+	stats.record_kick(FMEnums.Side.HOME, true)
+	stats.record_control(FMEnums.Side.HOME, 12.5)
+	stats.record_control(FMEnums.Side.AWAY, 7.5)
+	stats.record_event(RuleEvent.create(RuleEvent.Type.GOAL, "home goal", "", FMEnums.Side.HOME))
+	stats.record_event(RuleEvent.create(
+		RuleEvent.Type.FOUL, "foul", "", FMEnums.Side.AWAY,
+		FMEnums.FoulSeverity.YELLOW, FMEnums.RestartType.FREE_KICK
+	))
+	var data: Dictionary = stats.to_dict()
+	var home: Dictionary = data["home"]
+	var away: Dictionary = data["away"]
+	_check(int(home["shots"]) == 1 and int(home["passes"]) == 1, "match stats count shots and passes by side")
+	_check(is_equal_approx(float(home["control_seconds"]), 12.5), "match stats accumulate possession time")
+	_check(int(home["goals"]) == 1, "goal events credit the scoring side")
+	_check(int(home["fouls"]) == 1 and int(home["yellow_cards"]) == 1, "foul events credit the offender, not the victim")
+	_check(int(away["fouls"]) == 0, "fouls are not charged to the fouled side")
+	var parsed: Variant = JSON.parse_string(stats.summary())
+	_check(parsed is Dictionary, "stats summary is valid JSON")
+
+
 func _test_match_scene() -> void:
 	var packed: PackedScene = load("res://scenes/match_scene.tscn")
 	_check(packed != null, "match scene resource loads")
@@ -545,6 +569,19 @@ func _test_match_scene() -> void:
 	_check(agents.size() == 22, "match scene builds 22 decision agents")
 	var camera := instance.find_child("MatchCamera", true, false)
 	_check(camera != null, "match scene has a match camera")
+	var score_label: Label = instance.find_child("ScoreLabel", true, false)
+	var clock_label: Label = instance.find_child("ClockLabel", true, false)
+	var event_label: Label = instance.find_child("EventLabel", true, false)
+	_check(score_label != null and clock_label != null and event_label != null, "match scene has a compact HUD")
+	if score_label != null:
+		_check(score_label.text.contains("-"), "HUD shows the score")
+	var scene_stats: MatchStats = instance.call("get_stats")
+	_check(scene_stats != null, "match scene tracks calibration stats")
+	var scene_ball: Ball = instance.call("get_ball")
+	scene_ball.apply_player_kick(views[0], false, Vector3(1, 0, 0), 5.0, 0.0, 0.0, 0.0)
+	var scene_data: Dictionary = scene_stats.to_dict()
+	var home_data: Dictionary = scene_data["home"]
+	_check(int(home_data["shots"]) == 1, "match scene records a shot through the kick hook")
 	instance.free()
 
 
